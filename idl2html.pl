@@ -29,6 +29,7 @@ if ($^O eq 'MSWin32') {
 } else {
 	$parser->YYData->{preprocessor} = 'cpp -C -D__idl2html';
 }
+$parser->getopts("f");
 $parser->Run(@ARGV);
 $parser->YYData->{symbtab}->CheckForward();
 
@@ -74,7 +75,7 @@ idl2html [options] I<spec>.idl
 
 =head1 OPTIONS
 
-All options are forwarded to C preprocessor.
+All options are forwarded to C preprocessor, except -f.
 
 With the GNU C Compatible Compiler Processor, useful options are :
 
@@ -89,6 +90,16 @@ With the GNU C Compatible Compiler Processor, useful options are :
 =item B<-I->
 
 =item B<-nostdinc>
+
+=back
+
+Specific options :
+
+=over 8
+
+=item B<-f>
+
+Enable the frameset mode.
 
 =back
 
@@ -128,6 +139,8 @@ indicate text to be included automatically in generated documentation.
 
 Doc comments immediately preceed the entity being documented.
 
+Single line comments beginning with /// are also included.
+
 =head2 Standard HTML
 
 You can embed standard HTML tags within a doc comment. However, don't use tags
@@ -155,7 +168,7 @@ CORBA Specifications, including IDL (Interface Definition Language)
 
 =head1 SEE ALSO
 
-cpp, javadoc, perl
+cpp, javadoc
 
 =head1 COPYRIGHT
 
@@ -166,7 +179,7 @@ under the terms of the Artistic Licence.
 
 =head1 AUTHOR
 
-Francois PERRAD E<lt>perrad@besancon.sema.slb.comE<gt>
+Francois PERRAD, francois.perrad@gadz.org
 
 =cut
 

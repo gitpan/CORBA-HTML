@@ -2,7 +2,7 @@ Changes
 html.pm
 index.pm
 name.pm
-idl2html
+idl2html.pl
 MANIFEST
 Makefile.PL
 test.pl
