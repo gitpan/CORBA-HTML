@@ -1,11 +1,14 @@
 use strict;
 use UNIVERSAL;
 
+#
+#			Interface Definition Language (OMG IDL CORBA v3.0)
+#
+
 package htmlVisitor;
-use CORBA::HTML::name;
 
 use vars qw($VERSION);
-$VERSION = '1.04';
+$VERSION = '2.00';
 
 sub new {
 	my $proto = shift;
@@ -14,8 +17,9 @@ sub new {
 	bless($self, $class);
 	my ($parser) = @_;
 	$self->{parser} = $parser;
+	$self->{symbtab} = $parser->YYData->{symbtab};
 	$self->{frameset} = exists $parser->YYData->{opt_f};
-	$self->{html_name} = new HTMLnameVisitor();
+	$self->{html_name} = new HTMLnameVisitor($parser);
 	$self->{html_decl} = new HTMLdeclVisitor($self);
 	$self->{html_comment} = new HTMLcommentVisitor($self);
 	$self->{scope} = '';
@@ -48,22 +52,23 @@ sub _sep_line {
 
 sub _format_head {
 	my $self = shift;
-	my($title, $frameset) = @_;
+	my($title, $frameset, $target) = @_;
 	my $now = localtime();
 	print OUT "<?xml version='1.0' encoding='ISO-8859-1'?>\n";
 	if ($frameset) {
-		print OUT "<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Frameset//EN' 'xhtml1-frameset.dtd'>\n";
+		print OUT "<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Frameset//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd'>\n";
 	} else {
-		print OUT "<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'xhtml1-strict.dtd'>\n";
+		print OUT "<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>\n";
 	}
 	print OUT "<html xmlns='http://www.w3.org/1999/xhtml'>\n";
 	print OUT "\n";
 	print OUT "  <head>\n";
-	print OUT "    <meta name='generator' content='idl2html (Perl)' />\n";
+	print OUT "    <meta name='generator' content='idl2html ",$VERSION," (Perl ",$],")' />\n";
 	print OUT "    <meta name='date' content='",$now,"' />\n";
 	print OUT "    <meta http-equiv='Content-Type' content='text/html; charset=ISO-8859-1' />\n";
 	print OUT "    <title>",$title,"</title>\n";
 	unless ($frameset) {
+		print OUT "    <base target='",$target,"' />\n" if (defined $target);
 		print OUT "    <style type='text/css'>\n";
 		print OUT "      a.index {font-weight: bold}\n";
 		print OUT "      h2 {color: red}\n";
@@ -83,10 +88,22 @@ sub _format_head_main {
 	my($title) = @_;
 	$self->_format_head($title, 0);
 	print OUT "  <body>\n";
-	unless ($title eq "Global index" and $self->{frameset}) {
+	print OUT "    <h1><a id='__Top__' name='__Top__'/>",$title,"</h1>\n";
+	print OUT "    <p><a href='index.html'>Global index</a></p>\n"
+			unless ($self->{frameset});
+	print OUT "    <hr />\n";
+}
+
+sub _format_head_global_index {
+	my $self = shift;
+	my $title = "Global index";
+	if ($self->{frameset}) {
+		$self->_format_head($title, 0, "local");
+		print OUT "  <body>\n";
+	} else {
+		$self->_format_head($title, 0);
+		print OUT "  <body>\n";
 		print OUT "    <h1><a id='__Top__' name='__Top__'/>",$title,"</h1>\n";
-		print OUT "    <p><a href='index.html'>Global index</a></p>\n"
-				unless ($title eq "Global index" or $self->{frameset});
 		print OUT "    <hr />\n";
 	}
 }
@@ -94,9 +111,9 @@ sub _format_head_main {
 sub _format_head_index {
 	my $self = shift;
 	my($title) = @_;
-	$self->_format_head("Index " . $title, 0);
+	$self->_format_head("Index " . $title, 0, "main");
 	print OUT "  <body>\n";
-	print OUT "    <h1><a target='main' href='_",$title,".html#__Top__'>",$title,"</a></h1>\n";
+	print OUT "    <h1><a href='_",$title,".html#__Top__'>",$title,"</a></h1>\n";
 }
 
 sub _format_tail {
@@ -124,11 +141,7 @@ sub _format_index {
 			print OUT "<dl>\n";
 			foreach (sort keys %{$node->{$idx}}) {
 				my $child = $node->{$idx}->{$_};
-				if ($self->{frameset}) {
-					print OUT "    <dt><a class='index' target='main' href='",$child->{file_html},"#",$_,"'>";
-				} else {
-					print OUT "    <dt><a class='index' href='",$child->{file_html},"#",$_,"'>";
-				}
+				print OUT "    <dt><a class='index' href='",$child->{file_html},"#",$_,"'>";
 				print OUT $_,"</a></dt>\n";
 			}
 			print OUT "</dl>\n";
@@ -178,7 +191,10 @@ sub visitSpecification {
 	my @list_call = (
 		'module',
 		'interface',
-		'value'
+		'value',
+		'event',
+		'component',
+		'home'
 	);
 	foreach (@list_call) {
 		my $idx = 'index_' . $_;
@@ -231,7 +247,7 @@ sub visitSpecification {
 				or die "can't open index.html ($!).\n";
 		$self->{out} = \*OUT;
 
-		$self->_format_head_main("Global index");
+		$self->_format_head_global_index();
 		foreach (@list_call) {
 			my $idx = 'index_' . $_;
 			if (keys %{$main::global->{$idx}}) {
@@ -245,7 +261,7 @@ sub visitSpecification {
 					$first_filename = $filename
 							unless ($first_filename);
 					if ($self->{frameset}) {
-						print OUT "    <dt><a class='index' target='local' href='index._",$filename,"'>";
+						print OUT "    <dt><a class='index' href='index._",$filename,"'>";
 					} else {
 						print OUT "    <dt><a class='index' href='_",$filename,"#__Top__'>";
 					}
@@ -254,8 +270,10 @@ sub visitSpecification {
 				print OUT "</dl>\n";
 			}
 		}
-		$self->_sep_line()
-				unless ($self->{frameset});
+		unless ($self->{frameset}) {
+			$self->_sep_line();
+			print OUT "    <div><cite>Generated by idl2html</cite></div>\n";
+		}
 		$self->_format_tail(0);
 
 		close OUT;
@@ -287,20 +305,23 @@ sub visitSpecification {
 }
 
 #
-#	3.6		Module Declaration
+#	3.7		Module Declaration
 #
 
-sub visitModule {
+sub visitModules {
 	my $self = shift;
 	my($node) = @_;
 	my $scope_save = $self->{scope};
-	$self->{scope} = $node->{coll};
+	$self->{scope} = $node->{full};
 	$self->{scope} =~ s/^:://;
 	my $title = $self->{scope};
 	my @list_call = (
 		'module',
 		'interface',
-		'value'
+		'value',
+		'event',
+		'component',
+		'home'
 	);
 	my @list_idx = (
 		'module',
@@ -308,7 +329,10 @@ sub visitModule {
 		'value',
 		'type',
 		'exception',
-		'constant'
+		'constant',
+		'event',
+		'component',
+		'home'
 	);
 	my @list_decl = (
 		'boxed_value',
@@ -358,14 +382,14 @@ sub visitModule {
 }
 
 #
-#	3.7		Interface Declaration
+#	3.8		Interface Declaration
 #
 
-sub visitInterface {
+sub visitRegularInterface {
 	my $self = shift;
 	my($node) = @_;
 	my $scope_save = $self->{scope};
-	$self->{scope} = $node->{coll};
+	$self->{scope} = $node->{full};
 	$self->{scope} =~ s/^:://;
 	my $title = $self->{scope};
 	my @list = (
@@ -403,16 +427,98 @@ sub visitInterface {
 	$self->{scope} = $scope_save;
 }
 
+sub visitAbstractInterface {
+	my $self = shift;
+	my($node) = @_;
+	my $scope_save = $self->{scope};
+	$self->{scope} = $node->{full};
+	$self->{scope} =~ s/^:://;
+	my $title = $self->{scope};
+	my @list = (
+		'operation',
+		'attribute',
+		'type',
+		'exception',
+		'constant'
+	);
+	open OUT,"> $node->{file_html}"
+			or die "can't open $node->{file_html} ($!).\n";
+
+	$self->_format_head_main("Abstract Interface " . $title);
+	$self->_print_decl($node);
+	$self->_print_comment($node);
+	$self->_sep_line();
+	$self->_format_index($node,\@list)
+			unless ($self->{frameset});
+	$self->_format_decl($node,\@list);
+	$self->_format_tail(0);
+
+	close OUT;
+
+	if ($self->{frameset}) {
+		open OUT,"> index.$node->{file_html}"
+				or die "can't open index.$node->{file_html} ($!).\n";
+
+		$self->_format_head_index($title);
+		$self->_format_index($node,\@list);
+		$self->_format_tail(0);
+
+		close OUT;
+	}
+
+	$self->{scope} = $scope_save;
+}
+
+sub visitLocalInterface {
+	my $self = shift;
+	my($node) = @_;
+	my $scope_save = $self->{scope};
+	$self->{scope} = $node->{full};
+	$self->{scope} =~ s/^:://;
+	my $title = $self->{scope};
+	my @list = (
+		'operation',
+		'attribute',
+		'type',
+		'exception',
+		'constant'
+	);
+	open OUT,"> $node->{file_html}"
+			or die "can't open $node->{file_html} ($!).\n";
+
+	$self->_format_head_main("Local Interface " . $title);
+	$self->_print_decl($node);
+	$self->_print_comment($node);
+	$self->_sep_line();
+	$self->_format_index($node,\@list)
+			unless ($self->{frameset});
+	$self->_format_decl($node,\@list);
+	$self->_format_tail(0);
+
+	close OUT;
+
+	if ($self->{frameset}) {
+		open OUT,"> index.$node->{file_html}"
+				or die "can't open index.$node->{file_html} ($!).\n";
+
+		$self->_format_head_index($title);
+		$self->_format_index($node,\@list);
+		$self->_format_tail(0);
+
+		close OUT;
+	}
+
+	$self->{scope} = $scope_save;
+}
+
 #
-#	3.8		Value Declaration
-#
-#	3.8.1	Regular Value Type
+#	3.9		Value Declaration
 #
 
 sub visitRegularValue {
 	my $self = shift;
 	my($node) = @_;
-	$self->{scope} = $node->{coll};
+	$self->{scope} = $node->{full};
 	$self->{scope} =~ s/^:://;
 	my $title = $self->{scope};
 	my @list = (
@@ -450,14 +556,10 @@ sub visitRegularValue {
 	}
 }
 
-#
-#	3.8.3	Abstract Value Type
-#
-
 sub visitAbstractValue {
 	my $self = shift;
 	my($node) = @_;
-	$self->{scope} = $node->{coll};
+	$self->{scope} = $node->{full};
 	$self->{scope} =~ s/^:://;
 	my $title = $self->{scope};
 	my @list = (
@@ -465,9 +567,7 @@ sub visitAbstractValue {
 		'attribute',
 		'type',
 		'exception',
-		'constant',
-		'state_member',
-		'initializer'
+		'constant'
 	);
 	open OUT,"> $node->{file_html}"
 			or die "can't open $node->{file_html} ($!).\n";
@@ -495,10 +595,181 @@ sub visitAbstractValue {
 	}
 }
 
+#
+#	3.16	Event Declaration
+#
+
+sub visitRegularEvent {
+	my $self = shift;
+	my($node) = @_;
+	$self->{scope} = $node->{full};
+	$self->{scope} =~ s/^:://;
+	my $title = $self->{scope};
+	my @list = (
+		'operation',
+		'attribute',
+		'type',
+		'exception',
+		'constant',
+		'state_member',
+		'initializer'
+	);
+	open OUT,"> $node->{file_html}"
+			or die "can't open $node->{file_html} ($!).\n";
+
+	$self->_format_head_main("Event Type " . $title);
+	$self->_print_decl($node);
+	$self->_print_comment($node);
+	$self->_sep_line();
+	$self->_format_index($node,\@list)
+			unless ($self->{frameset});
+	$self->_format_decl($node,\@list);
+	$self->_format_tail(0);
+
+	close OUT;
+
+	if ($self->{frameset}) {
+		open OUT,"> index.$node->{file_html}"
+				or die "can't open index.$node->{file_html} ($!).\n";
+
+		$self->_format_head_index($title);
+		$self->_format_index($node,\@list);
+		$self->_format_tail(0);
+
+		close OUT;
+	}
+}
+
+sub visitAbstractEvent {
+	my $self = shift;
+	my($node) = @_;
+	$self->{scope} = $node->{full};
+	$self->{scope} =~ s/^:://;
+	my $title = $self->{scope};
+	my @list = (
+		'operation',
+		'attribute',
+		'type',
+		'exception',
+		'constant'
+	);
+	open OUT,"> $node->{file_html}"
+			or die "can't open $node->{file_html} ($!).\n";
+
+	$self->_format_head_main("Abstract Event Type " . $title);
+	$self->_print_decl($node);
+	$self->_print_comment($node);
+	$self->_sep_line();
+	$self->_format_index($node,\@list)
+			unless ($self->{frameset});
+	$self->_format_decl($node,\@list);
+	$self->_format_tail(0);
+
+	close OUT;
+
+	if ($self->{frameset}) {
+		open OUT,"> index.$node->{file_html}"
+				or die "can't open index.$node->{file_html} ($!).\n";
+
+		$self->_format_head_index($title);
+		$self->_format_index($node,\@list);
+		$self->_format_tail(0);
+
+		close OUT;
+	}
+}
+
+#
+#	3.17	Component Declaration
+#
+
+sub visitComponent {
+	my $self = shift;
+	my($node) = @_;
+	$self->{scope} = $node->{full};
+	$self->{scope} =~ s/^:://;
+	my $title = $self->{scope};
+	my @list = (
+		'provides',
+		'uses',
+		'publishes',
+		'consumes',
+		'attribute'
+	);
+	open OUT,"> $node->{file_html}"
+			or die "can't open $node->{file_html} ($!).\n";
+
+	$self->_format_head_main("Component " . $title);
+	$self->_print_decl($node);
+	$self->_print_comment($node);
+	$self->_sep_line();
+	$self->_format_index($node,\@list)
+			unless ($self->{frameset});
+	$self->_format_decl($node,\@list);
+	$self->_format_tail(0);
+
+	close OUT;
+
+	if ($self->{frameset}) {
+		open OUT,"> index.$node->{file_html}"
+				or die "can't open index.$node->{file_html} ($!).\n";
+
+		$self->_format_head_index($title);
+		$self->_format_index($node,\@list);
+		$self->_format_tail(0);
+
+		close OUT;
+	}
+}
+
+#
+#	3.18	Home Declaration
+#
+
+sub visitHome {
+	my $self = shift;
+	my($node) = @_;
+	$self->{scope} = $node->{full};
+	$self->{scope} =~ s/^:://;
+	my $title = $self->{scope};
+	my @list = (
+		'operation',
+		'attribute',
+		'type',
+		'exception',
+		'constant',
+		'factory',
+		'finder'
+	);
+	open OUT,"> $node->{file_html}"
+			or die "can't open $node->{file_html} ($!).\n";
+
+	$self->_format_head_main("Home " . $title);
+	$self->_print_decl($node);
+	$self->_print_comment($node);
+	$self->_sep_line();
+	$self->_format_index($node,\@list)
+			unless ($self->{frameset});
+	$self->_format_decl($node,\@list);
+	$self->_format_tail(0);
+
+	close OUT;
+
+	if ($self->{frameset}) {
+		open OUT,"> index.$node->{file_html}"
+				or die "can't open index.$node->{file_html} ($!).\n";
+
+		$self->_format_head_index($title);
+		$self->_format_index($node,\@list);
+		$self->_format_tail(0);
+
+		close OUT;
+	}
+}
+
 ##############################################################################
 
 package HTMLdeclVisitor;
-use CORBA::HTML::name;
 
 sub new {
 	my $proto = shift;
@@ -509,9 +780,22 @@ sub new {
 	return $self;
 }
 
+sub _get_defn {
+	my $self = shift;
+	my($defn) = @_;
+	if (ref $defn) {
+		return $defn;
+	} else {
+		return $self->{parent}->{symbtab}->Lookup($defn);
+	}
+}
+
 sub _get_name {
 	my $self = shift;
 	my($node) = @_;
+	unless (ref $node) {
+		$node = $self->{parent}->{symbtab}->Lookup($node);
+	}
 	return $node->visitName($self->{parent}->{html_name},$self->{parent}->{scope});
 }
 
@@ -519,23 +803,27 @@ sub _get_name {
 #	3.6		Module Declaration
 #
 
-sub visitModule {
+sub visitModules {
 	my $self = shift;
 	my($node,$FH) = @_;
-	print $FH "<p><a id='",$node->{idf},"' name='",$node->{idf},"'/>module <span class='decl'>",$node->{idf},"</span></p>\n";
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>\n";
+	print $FH "<pre>module <span class='decl'>",$node->{idf},"</span>\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "typeprefix ",$node->{idf}," \"",$node->{typeprefix},"\";\n"
+			if (exists $node->{typeprefix});
+	print $FH "</pre>\n";
 }
 
 #
-#	3.7		Interface Declaration
+#	3.8		Interface Declaration
 #
 
-sub visitInterface {
+sub visitRegularInterface {
 	my $self = shift;
 	my($node,$FH) = @_;
-	print $FH "<p><a id='",$node->{idf},"' name='",$node->{idf},"'/>";
-		print $FH $node->{modifier}," "
-				if (exists $node->{modifier});
-		print $FH "interface <span class='decl'>",$node->{idf},"</span>";
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>\n";
+	print $FH "<pre>interface <span class='decl'>",$node->{idf},"</span>";
 		if (exists $node->{list_inheritance}) {
 			print $FH " : ";
 			my $first = 1;
@@ -545,22 +833,72 @@ sub visitInterface {
 				$first = 0;
 			}
 		}
-		print $FH "</p>\n";
+		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "typeprefix ",$node->{idf}," \"",$node->{typeprefix},"\";\n"
+			if (exists $node->{typeprefix});
+	print $FH "</pre>\n";
+}
+
+sub visitAbstractInterface {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>\n";
+	print $FH "<pre>abstract interface <span class='decl'>",$node->{idf},"</span>";
+		if (exists $node->{list_inheritance}) {
+			print $FH " : ";
+			my $first = 1;
+			foreach (@{$node->{list_inheritance}}) {
+				print $FH ", " unless ($first);
+				print $FH $self->_get_name($_);
+				$first = 0;
+			}
+		}
+		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "typeprefix ",$node->{idf}," \"",$node->{typeprefix},"\";\n"
+			if (exists $node->{typeprefix});
+	print $FH "</pre>\n";
+}
+
+sub visitLocalInterface {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>\n";
+	print $FH "<pre>local interface <span class='decl'>",$node->{idf},"</span>";
+		if (exists $node->{list_inheritance}) {
+			print $FH " : ";
+			my $first = 1;
+			foreach (@{$node->{list_inheritance}}) {
+				print $FH ", " unless ($first);
+				print $FH $self->_get_name($_);
+				$first = 0;
+			}
+		}
+		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "typeprefix ",$node->{idf}," \"",$node->{typeprefix},"\";\n"
+			if (exists $node->{typeprefix});
+	print $FH "</pre>\n";
 }
 
 #
-#	3.8		Value Declaration
+#	3.9		Value Declaration
 #
-#	3.8.1	Regular Value Type
+#	3.9.1	Regular Value Type
 #
 
 sub visitRegularValue {
 	my $self = shift;
 	my($node,$FH) = @_;
-	print $FH "<p><a id='",$node->{idf},"' name='",$node->{idf},"'/>";
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>\n";
+	print $FH "<pre>";
 		print $FH "custom "
 				if (exists $node->{modifier});
-		print $FH "valuetype <span class='decl'>",$node->{idf},"</span>";
+		print $FH "value <span class='decl'>",$node->{idf},"</span>";
 		if (exists $node->{inheritance}) {
 			my $inheritance = $node->{inheritance};
 			print $FH " : ";
@@ -583,7 +921,12 @@ sub visitRegularValue {
 				}
 			}
 		}
-		print $FH "</p>\n";
+		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "typeprefix ",$node->{idf}," \"",$node->{typeprefix},"\";\n"
+			if (exists $node->{typeprefix});
+	print $FH "</pre>\n";
 }
 
 sub visitStateMember {
@@ -600,10 +943,12 @@ sub visitStateMember {
 			}
 		}
 		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
 	print $FH "</pre>\n";
 }
 
-sub visitFactory {
+sub visitInitializer {
 	my $self = shift;
 	my($node,$FH) = @_;
 	print $FH "<pre>  factory <span class='decl'>",$node->{idf},"</span> (";
@@ -616,11 +961,21 @@ sub visitFactory {
 	}
 	print $FH "\n";
 	print $FH "  )";
+	if (exists $node->{list_raise}) {
+		print $FH " raises(";
+		my $first = 1;
+		foreach (@{$node->{list_raise}}) {	# exception
+			print $FH ", " unless ($first);
+			print $FH $self->_get_name($_);
+			$first = 0;
+	    }
+	    print $FH ")";
+	}
+	print $FH ";\n";
 	print $FH "</pre>\n";
 }
 
-#
-#	3.8.2	Boxed Value Type
+#	3.9.2	Boxed Value Type
 #
 
 sub visitBoxedValue {
@@ -630,18 +985,21 @@ sub visitBoxedValue {
 		print $FH "<span class='decl'>",$node->{idf},"</span> ";
 		print $FH $self->_get_name($node->{type});
 		print $FH ";\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "  typeprefix ",$node->{idf}," \"",$node->{typeprefix},"\";\n"
+			if (exists $node->{typeprefix});
 	print $FH "</pre>\n";
 }
 
-#
-#	3.8.3	Abstract Value Type
+#	3.9.3	Abstract Value Type
 #
 
 sub visitAbstractValue {
 	my $self = shift;
 	my($node,$FH) = @_;
-	print $FH "<p><a id='",$node->{idf},"' name='",$node->{idf},"'/>";
-		print $FH "abstract valuetype <span class='decl'>",$node->{idf},"</span>";
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>\n";
+	print $FH "<pre>abstract valuetype <span class='decl'>",$node->{idf},"</span>";
 		if (exists $node->{inheritance}) {
 			my $inheritance = $node->{inheritance};
 			print $FH " : ";
@@ -664,11 +1022,16 @@ sub visitAbstractValue {
 				}
 			}
 		}
-		print $FH "</p>\n";
+		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "typeprefix ",$node->{idf}," \"",$node->{typeprefix},"\";\n"
+			if (exists $node->{typeprefix});
+	print $FH "</pre>\n";
 }
 
 #
-#	3.9		Constant Declaration
+#	3.10	Constant Declaration
 #
 
 sub visitConstant {
@@ -679,6 +1042,8 @@ sub visitConstant {
 		print $FH " <span class='decl'>",$node->{idf},"</span> = ";
 		$node->{value}->visit($self,$FH);		# expression
 		print $FH ";\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
 	print $FH "</pre>\n";
 }
 
@@ -689,7 +1054,7 @@ sub visitExpression {
 }
 
 #
-#	3.10	Type Declaration
+#	3.11	Type Declaration
 #
 
 sub visitTypeDeclarator {
@@ -711,13 +1076,15 @@ sub visitTypeDeclarator {
 			}
 			print $FH ";\n";
 	}
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
 	print $FH "</pre>\n";
 }
 
 #
-#	3.10.2	Constructed Types
+#	3.11.2	Constructed Types
 #
-#	3.10.2.1	Structures
+#	3.11.2.1	Structures
 #
 
 sub visitStructType {
@@ -742,7 +1109,7 @@ sub visitMembers {
 		} else {
 			print $FH ",";
 		}
-		$_->visit($self,$FH);				# single or array
+		$self->_get_defn($_)->visit($self,$FH);		# single or array
 	}
 	print $FH ";\n";
 }
@@ -764,7 +1131,7 @@ sub visitSingle {
 	print $FH " ",$node->{idf};
 }
 
-#	3.10.2.2	Discriminated Unions
+#	3.11.2.2	Discriminated Unions
 #
 
 sub visitUnionType {
@@ -799,11 +1166,11 @@ sub visitElement {
 	my $self = shift;
 	my($node,$FH) = @_;
 	print $FH "      ",$self->_get_name($node->{type});
-	$node->{value}->visit($self,$FH);		# array or single
+	$self->_get_defn($node->{value})->visit($self,$FH);		# single or array
 	print $FH ";\n";
 }
 
-#	3.10.2.3	Enumerations
+#	3.11.2.4	Enumerations
 #
 
 sub visitEnumType {
@@ -818,11 +1185,13 @@ sub visitEnumType {
 	}
 	print $FH "\n";
 	print $FH "  };\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
 	print $FH "</pre>\n";
 }
 
 #
-#	3.11	Exception Declaration
+#	3.12	Exception Declaration
 #
 
 sub visitException {
@@ -833,11 +1202,13 @@ sub visitException {
 		$_->visit($self,$FH);				# members
 	}
 	print $FH "  };\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
 	print $FH "</pre>\n";
 }
 
 #
-#	3.12	Operation Declaration
+#	3.13	Operation Declaration
 #
 
 sub visitOperation {
@@ -867,11 +1238,13 @@ sub visitOperation {
 	    print $FH ")";
 	}
 	print $FH ";\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
 	print $FH "</pre>\n";
 }
 
 #
-#	3.13	Attribute Declaration
+#	3.14	Attribute Declaration
 #
 
 sub visitAttribute {
@@ -882,13 +1255,268 @@ sub visitAttribute {
 		print $FH "attribute ";
 		print $FH $self->_get_name($node->{type});
 		print $FH " <span class='decl'>",$node->{idf},"</span>;";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+#
+#	3.16	Event Declaration
+#
+
+sub visitRegularEvent {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>\n";
+	print $FH "<pre>";
+		print $FH "custom "
+				if (exists $node->{modifier});
+		print $FH "eventtype <span class='decl'>",$node->{idf},"</span>";
+		if (exists $node->{inheritance}) {
+			my $inheritance = $node->{inheritance};
+			print $FH " : ";
+			if (exists $inheritance->{list_value}) {
+				print $FH "truncatable " if (exists $inheritance->{modifier});
+				my $first = 1;
+				foreach (@{$inheritance->{list_value}}) {
+					print $FH ", " if (! $first);
+					print $FH $self->_get_name($_);
+					$first = 0;
+				}
+			}
+			if (exists $inheritance->{list_interface}) {
+				print $FH "support ";
+				my $first = 1;
+				foreach (@{$inheritance->{list_interface}}) {
+					print $FH ", " if (! $first);
+					print $FH $self->_get_name($_);
+					$first = 0;
+				}
+			}
+		}
+		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "typeprefix ",$node->{idf}," \"",$node->{typeprefix},"\";\n"
+			if (exists $node->{typeprefix});
+	print $FH "</pre>\n";
+}
+
+sub visitAbstractEvent {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>\n";
+	print $FH "<pre>abstract eventtype <span class='decl'>",$node->{idf},"</span>";
+		if (exists $node->{inheritance}) {
+			my $inheritance = $node->{inheritance};
+			print $FH " : ";
+			if (exists $inheritance->{list_value}) {
+				print $FH "truncatable " if (exists $inheritance->{modifier});
+				my $first = 1;
+				foreach (@{$inheritance->{list_value}}) {
+					print $FH ", " if (! $first);
+					print $FH $self->_get_name($_);
+					$first = 0;
+				}
+			}
+			if (exists $inheritance->{list_interface}) {
+				print $FH "support ";
+				my $first = 1;
+				foreach (@{$inheritance->{list_interface}}) {
+					print $FH ", " if (! $first);
+					print $FH $self->_get_name($_);
+					$first = 0;
+				}
+			}
+		}
+		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "typeprefix ",$node->{idf}," \"",$node->{typeprefix},"\";\n"
+			if (exists $node->{typeprefix});
+	print $FH "</pre>\n";
+}
+
+#
+#	3.17	Component Declaration
+#
+
+sub visitComponent {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>";
+	print $FH "<pre>component <span class='decl'>",$node->{idf},"</span>";
+		if (exists $node->{inheritance}) {
+			print $FH " : ",$self->_get_name($node->{inheritance});
+		}
+		if (exists $node->{list_support}) {
+			print $FH " support ";
+			my $first = 1;
+			foreach (@{$node->{list_support}}) {
+				print $FH ", " if (! $first);
+				print $FH $self->_get_name($_);
+				$first = 0;
+			}
+		}
+		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+sub visitProvides {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<pre>  ";
+		print $FH "provides ";
+		print $FH $self->_get_name($node->{type});
+		print $FH " <span class='decl'>",$node->{idf},"</span>;\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+sub visitUses {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<pre>  ";
+		print $FH "provides ";
+		print $FH "multiple " if (exists $node->{modifier});
+		print $FH $self->_get_name($node->{type});
+		print $FH " <span class='decl'>",$node->{idf},"</span>;\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+sub visitPublishes {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<pre>  ";
+		print $FH "publishes ";
+		print $FH $self->_get_name($node->{type});
+		print $FH " <span class='decl'>",$node->{idf},"</span>;\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+sub visitEmits {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<pre>  ";
+		print $FH "emits ";
+		print $FH $self->_get_name($node->{type});
+		print $FH " <span class='decl'>",$node->{idf},"</span>;\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+sub visitConsumes {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<pre>  ";
+		print $FH "consumes ";
+		print $FH $self->_get_name($node->{type});
+		print $FH " <span class='decl'>",$node->{idf},"</span>;\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+#
+#	3.18	Home Declaration
+#
+
+sub visitHome {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<a id='",$node->{idf},"' name='",$node->{idf},"'/>";
+	print $FH "<pre>home <span class='decl'>",$node->{idf},"</span>";
+		if (exists $node->{inheritance}) {
+			print $FH " : ",$self->_get_name($node->{inheritance});
+		}
+		if (exists $node->{list_support}) {
+			print $FH " support ";
+			my $first = 1;
+			foreach (@{$node->{list_support}}) {
+				print $FH ", " if (! $first);
+				print $FH $self->_get_name($_);
+				$first = 0;
+			}
+		}
+		print $FH " manages ",$self->_get_name($node->{manage});
+		if (exists $node->{primarykey}) {
+			print $FH " primarykey ",$self->_get_name($node->{primarykey});
+		}
+		print $FH ";\n";
+	print $FH "typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+sub visitFactory {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<pre>  factory <span class='decl'>",$node->{idf},"</span> (";
+	my $first = 1;
+	foreach (@{$node->{list_param}}) {	# parameter
+		print $FH "," unless ($first);
+		print $FH "\n";
+		print $FH "    ",$_->{attr}," ",$self->_get_name($_->{type})," ",$_->{idf};
+		$first = 0;
+	}
+	print $FH "\n";
+	print $FH "  )";
+	if (exists $node->{list_raise}) {
+		print $FH " raises(";
+		my $first = 1;
+		foreach (@{$node->{list_raise}}) {	# exception
+			print $FH ", " unless ($first);
+			print $FH $self->_get_name($_);
+			$first = 0;
+	    }
+	    print $FH ")";
+	}
+	print $FH ";\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+sub visitFinder {
+	my $self = shift;
+	my($node,$FH) = @_;
+	print $FH "<pre>  finder <span class='decl'>",$node->{idf},"</span> (";
+	my $first = 1;
+	foreach (@{$node->{list_param}}) {	# parameter
+		print $FH "," unless ($first);
+		print $FH "\n";
+		print $FH "    ",$_->{attr}," ",$self->_get_name($_->{type})," ",$_->{idf};
+		$first = 0;
+	}
+	print $FH "\n";
+	print $FH "  )";
+	if (exists $node->{list_raise}) {
+		print $FH " raises(";
+		my $first = 1;
+		foreach (@{$node->{list_raise}}) {	# exception
+			print $FH ", " unless ($first);
+			print $FH $self->_get_name($_);
+			$first = 0;
+	    }
+	    print $FH ")";
+	}
+	print $FH ";\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
 	print $FH "</pre>\n";
 }
 
 ##############################################################################
 
 package HTMLcommentVisitor;
-use CORBA::HTML::name;
 
 sub new {
 	my $proto = shift;
@@ -897,6 +1525,16 @@ sub new {
 	bless($self, $class);
 	$self->{parent} = shift;
 	return $self;
+}
+
+sub _get_defn {
+	my $self = shift;
+	my($defn) = @_;
+	if (ref $defn) {
+		return $defn;
+	} else {
+		return $self->{parent}->{symbtab}->Lookup($defn);
+	}
 }
 
 sub _get_name {
@@ -911,7 +1549,7 @@ sub _extract_doc {
 	my $doc = undef;
 	my @tags = ();
 	unless ($node->isa('Parameter')) {
-		$self->{scope} = $node->{coll};
+		$self->{scope} = $node->{full};
 		$self->{scope} =~ s/::[0-9A-Z_a-z]+$//;
 	}
 	if (exists $node->{doc}) {
@@ -931,8 +1569,8 @@ sub _extract_doc {
 		}
 	}
 	# adds tag from pragma
-	if (exists $node->{repos_id}) {
-		push @tags, ["Repository ID", $node->{repos_id}];
+	if (exists $node->{id}) {
+		push @tags, ["Repository ID", $node->{id}];
 	} else {
 		if (exists $node->{version}) {
 			push @tags, ["version", $node->{version}];
@@ -970,7 +1608,7 @@ sub _lookup {
 #		print "qualified name : '$scoped_name' '$idf'\n";
 		my $scope = $self->_lookup($scoped_name);		# recursive
 		if (defined $scope) {
-			$defn = $self->{parent}->{parser}->YYData->{symbtab}->___Lookup($scope->{coll} . '::' . $idf);
+			$defn = $self->{parent}->{parser}->YYData->{symbtab}->___Lookup($scope->{full} . '::' . $idf);
 		}
 		return $defn;
 	}
@@ -1056,7 +1694,37 @@ sub _format_tags {
 #	3.6		Module Declaration
 #
 
-sub visitModule {
+sub visitModules {
+	my $self = shift;
+	my($node,$FH) = @_;
+	foreach (@{$node->{list_decl}}) {
+		my($doc,$tags) = $self->_extract_doc($_);
+		$self->_format_doc_bloc($doc,$FH);
+		$self->_format_tags($tags,$FH);
+	}
+}
+
+#
+#	3.8		Interface Declaration
+#
+
+sub visitRegularInterface {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitAbstractInterface {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitLocalInterface {
 	my $self = shift;
 	my($node,$FH) = @_;
 	my($doc,$tags) = $self->_extract_doc($node);
@@ -1065,21 +1733,9 @@ sub visitModule {
 }
 
 #
-#	3.7		Interface Declaration
+#	3.9		Value Declaration
 #
-
-sub visitInterface {
-	my $self = shift;
-	my($node,$FH) = @_;
-	my($doc,$tags) = $self->_extract_doc($node);
-	$self->_format_doc_bloc($doc,$FH);
-	$self->_format_tags($tags,$FH);
-}
-
-#
-#	3.8		Value Declaration
-#
-#	3.8.1	Regular Value Type
+#	3.9.1	Regular Value Type
 #
 
 sub visitRegularValue {
@@ -1098,48 +1754,31 @@ sub visitStateMember {
 	$self->_format_tags($tags,$FH);
 }
 
-sub visitFactory {
+sub visitInitializer {
 	my $self = shift;
 	my($node,$FH) = @_;
 	my($doc,$tags) = $self->_extract_doc($node);
 	$self->_format_doc_bloc($doc,$FH);
-	if (scalar(@{$node->{list_in}}) + scalar(@{$node->{list_inout}}) + scalar(@{$node->{list_out}})) {
+	if (scalar(@{$node->{list_in}})) {
 #		print $FH "  <br />\n";
 		print $FH "  <ul>\n";
-		if (scalar(@{$node->{list_in}})) {
-			print $FH "    <li>Parameter(s) IN :\n";
-			print $FH "      <ul>\n";
-			foreach (@{$node->{list_in}}) {
-				$_->visit($self,$FH);			# parameter
-			}
-			print $FH "      </ul>\n";
-			print $FH "    </li>\n";
+		if (scalar(@{$node->{list_in}}) > 1) {
+			print $FH "    <li>Parameters :\n";
+		} else {
+			print $FH "    <li>Parameter :\n";
 		}
-		if (scalar(@{$node->{list_inout}})) {
-			print $FH "    <li>Parameter(s) INOUT :\n";
-			print $FH "      <ul>\n";
-			foreach (@{$node->{list_inout}}) {
-				$_->visit($self,$FH);			# parameter
-			}
-			print $FH "      </ul>\n";
-			print $FH "    </li>\n";
+		print $FH "      <ul>\n";
+		foreach (@{$node->{list_in}}) {
+			$_->visit($self,$FH);			# parameter
 		}
-		if (scalar(@{$node->{list_out}})) {
-			print $FH "    <li>Parameter(s) OUT :\n";
-			print $FH "      <ul>\n";
-			foreach (@{$node->{list_out}}) {
-				$_->visit($self,$FH);			# parameter
-			}
-			print $FH "      </ul>\n";
-			print $FH "    </li>\n";
-		}
+		print $FH "      </ul>\n";
+		print $FH "    </li>\n";
 		print $FH "  </ul>\n";
 	}
 	$self->_format_tags($tags,$FH);
 }
 
-#
-#	3.8.2	Boxed Value Type
+#	3.9.2	Boxed Value Type
 #
 
 sub visitBoxedValue {
@@ -1150,8 +1789,7 @@ sub visitBoxedValue {
 	$self->_format_tags($tags,$FH);
 }
 
-#
-#	3.8.3	Abstract Value Type
+#	3.9.3	Abstract Value Type
 #
 
 sub visitAbstractValue {
@@ -1163,7 +1801,7 @@ sub visitAbstractValue {
 }
 
 #
-#	3.9		Constant Declaration
+#	3.10	Constant Declaration
 #
 
 sub visitConstant {
@@ -1175,7 +1813,7 @@ sub visitConstant {
 }
 
 #
-#	3.10	Type Declaration
+#	3.11	Type Declaration
 #
 
 sub visitTypeDeclarator {
@@ -1186,10 +1824,9 @@ sub visitTypeDeclarator {
 	$self->_format_tags($tags,$FH);
 }
 
+#	3.11.2	Constructed Types
 #
-#	3.10.2	Constructed Types
-#
-#	3.10.2.1	Structures
+#	3.11.2.1	Structures
 #
 
 sub visitStructType {
@@ -1200,13 +1837,13 @@ sub visitStructType {
 	my $doc_member = 0;
 	foreach (@{$node->{list_value}}) {
 		$doc_member ++
-				if (exists $_->{doc});
+				if (exists $self->_get_defn($_)->{doc});
 	}
 	if ($doc_member) {
 #		print $FH "  <br />\n";
 		print $FH "  <ul>\n";
 		foreach (@{$node->{list_value}}) {
-			$_->visit($self,$FH);			# single or array
+			$self->_get_defn($_)->visit($self,$FH);		# single or array
 		}
 		print $FH "  </ul>\n";
 	}
@@ -1227,7 +1864,7 @@ sub visitSingle {
 	$self->_format_doc_line($node,$doc,$FH);
 }
 
-#	3.10.2.2	Discriminated Unions
+#	3.11.2.2	Discriminated Unions
 #
 
 sub visitUnionType {
@@ -1236,34 +1873,22 @@ sub visitUnionType {
 	my($doc,$tags) = $self->_extract_doc($node);
 	$self->_format_doc_bloc($doc,$FH);
 	my $doc_member = 0;
-	foreach (@{$node->{list_value}}) {
+	foreach (@{$node->{list_expr}}) {
 		$doc_member ++
-				if (exists $_->{doc});
+				if (exists $self->_get_defn($_->{element}->{value})->{doc});
 	}
 	if ($doc_member) {
 #		print $FH "  <br />\n";
 		print $FH "  <ul>\n";
 		foreach (@{$node->{list_expr}}) {
-			$_->visit($self,$FH);			# case
+			$self->_get_defn($_->{element}->{value})->visit($self,$FH);		# single or array
 		}
 		print $FH "  </ul>\n";
 	}
 	$self->_format_tags($tags,$FH);
 }
 
-sub visitCase {
-	my $self = shift;
-	my($node,$FH) = @_;
-	$node->{element}->visit($self,$FH);		# element
-}
-
-sub visitElement {
-	my $self = shift;
-	my($node,$FH) = @_;
-	$node->{value}->visit($self,$FH);		# array or single
-}
-
-#	3.10.2.3	Enumerations
+#	3.11.2.4	Enumerations
 #
 
 sub visitEnumType {
@@ -1272,7 +1897,7 @@ sub visitEnumType {
 	my($doc,$tags) = $self->_extract_doc($node);
 	$self->_format_doc_bloc($doc,$FH);
 	my $doc_member = 0;
-	foreach (@{$node->{list_value}}) {
+	foreach (@{$node->{list_expr}}) {
 		$doc_member ++
 				if (exists $_->{doc});
 	}
@@ -1295,7 +1920,7 @@ sub visitEnum {
 }
 
 #
-#	3.11	Exception Declaration
+#	3.12	Exception Declaration
 #
 
 sub visitException {
@@ -1306,13 +1931,13 @@ sub visitException {
 	my $doc_member = 0;
 	foreach (@{$node->{list_value}}) {
 		$doc_member ++
-				if (exists $_->{doc});
+				if (exists $self->_get_defn($_)->{doc});
 	}
 	if ($doc_member) {
 #		print $FH "  <br />\n";
 		print $FH "  <ul>\n";
 		foreach (@{$node->{list_value}}) {
-			$_->visit($self,$FH);			# single or array
+			$self->_get_defn($_)->visit($self,$FH);		# single or array
 		}
 		print $FH "  </ul>\n";
 	}
@@ -1320,7 +1945,7 @@ sub visitException {
 }
 
 #
-#	3.12	Operation Declaration
+#	3.13	Operation Declaration
 #
 
 sub visitOperation {
@@ -1383,7 +2008,7 @@ sub visitParameter {
 }
 
 #
-#	3.13	Attribute Declaration
+#	3.14	Attribute Declaration
 #
 
 sub visitAttribute {
@@ -1392,6 +2017,538 @@ sub visitAttribute {
 	my($doc,$tags) = $self->_extract_doc($node);
 	$self->_format_doc_bloc($doc,$FH);
 	$self->_format_tags($tags,$FH);
+}
+
+#
+#	3.16	Event Declaration
+#
+
+sub visitRegularEvent {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitAbstractEvent {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+#
+#	3.17	Component Declaration
+#
+
+sub visitComponent {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitProvides {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitUses {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitPublishes {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitEmits {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitConsumes {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+#
+#	3.18	Home Declaration
+#
+
+sub visitHome {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitFactory {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	if (scalar(@{$node->{list_in}})) {
+#		print $FH "  <br />\n";
+		print $FH "  <ul>\n";
+		if (scalar(@{$node->{list_in}}) > 1) {
+			print $FH "    <li>Parameters :\n";
+		} else {
+			print $FH "    <li>Parameter :\n";
+		}
+		print $FH "      <ul>\n";
+		foreach (@{$node->{list_in}}) {
+			$_->visit($self,$FH);			# parameter
+		}
+		print $FH "      </ul>\n";
+		print $FH "    </li>\n";
+		print $FH "  </ul>\n";
+	}
+	$self->_format_tags($tags,$FH);
+}
+
+sub visitFinder {
+	my $self = shift;
+	my($node,$FH) = @_;
+	my($doc,$tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc,$FH);
+	if (scalar(@{$node->{list_in}})) {
+#		print $FH "  <br />\n";
+		print $FH "  <ul>\n";
+		if (scalar(@{$node->{list_in}}) > 1) {
+			print $FH "    <li>Parameters :\n";
+		} else {
+			print $FH "    <li>Parameter :\n";
+		}
+		print $FH "      <ul>\n";
+		foreach (@{$node->{list_in}}) {
+			$_->visit($self,$FH);			# parameter
+		}
+		print $FH "      </ul>\n";
+		print $FH "    </li>\n";
+		print $FH "  </ul>\n";
+	}
+	$self->_format_tags($tags,$FH);
+}
+
+##############################################################################
+
+package HTMLnameVisitor;
+
+sub new {
+	my $proto = shift;
+	my $class = ref($proto) || $proto;
+	my $self = {};
+	bless($self, $class);
+	my($parser) = @_;
+	$self->{symbtab} = $parser->YYData->{symbtab};
+	return $self;
+}
+
+sub _get_name {
+	my $self = shift;
+	my($node, $scope) = @_;
+	my $full = $node->{full};
+	$full =~ s/^:://;
+	my @list_name = split /::/, $full;
+	my @list_scope = split /::/, $scope;
+	while (@list_scope) {
+		last if ($list_scope[0] ne $list_name[0]);
+		shift @list_name;
+		shift @list_scope;
+	}
+	my $name = join '::', @list_name;
+	my $fragment = $node->{idf};
+	$fragment = $node->{html_name} if (exists $node->{html_name});
+	my $a = "<a href='" . $node->{file_html} . "#" . $fragment . "'>" . $name . "</a>";
+	return $a;
+}
+
+sub _get_lexeme {
+	my $self = shift;
+	my($node) = @_;
+	my $value = $node->{lexeme};
+	$value =~ s/&/"&amp;"/g;
+	$value =~ s/</"&lt;"/g;
+	$value =~ s/>/"&gt;"/g;
+	return $value;
+}
+
+sub _get_defn {
+	my $self = shift;
+	my($defn) = @_;
+	if (ref $defn) {
+		return $defn;
+	} else {
+		return $self->{symbtab}->Lookup($defn);
+	}
+}
+
+#
+#	3.8		Interface Declaration
+#
+
+sub visitNameRegularInterface {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+sub visitNameAbstractInterface {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+sub visitNameLocalInterface {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+#
+#	3.9		Value Declaration
+#
+
+sub visitNameRegularValue {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+sub visitNameBoxedValue {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+sub visitNameAbstractValue {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+#
+#	3.10	Constant Declaration
+#
+
+sub visitNameConstant {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+#
+#	3.11	Type Declaration
+#
+
+sub visitNameTypeDeclarator {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+sub visitNameBasicType {
+	my $self = shift;
+	my($node) = @_;
+	return $node->{value};
+}
+
+sub visitNameAnyType {
+	my $self = shift;
+	my($node) = @_;
+	return $node->{value};
+}
+
+sub visitNameStructType {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+sub visitNameUnionType {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+sub visitNameEnumType {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+sub visitNameSequenceType {
+	my $self = shift;
+	my($node,$scope) = @_;
+	my $type = $self->_get_defn($node->{type});
+	my $name = $node->{value} . "&lt;";
+	$name .= $type->visitName($self,$scope);
+	if (exists $node->{max}) {
+		$name .= ",";
+		$name .= $node->{max}->visitName($self,$scope);
+	}
+	$name .= "&gt;";
+	return $name;
+}
+
+sub visitNameStringType {
+	my $self = shift;
+	my($node,$scope) = @_;
+	if (exists $node->{max}) {
+		my $name = $node->{value} . "&lt;";
+		$name .= $node->{max}->visitName($self,$scope);
+		$name .= "&gt;";
+		return $name;
+	} else {
+		return $node->{value};
+	}
+}
+
+sub visitNameWideStringType {
+	my $self = shift;
+	my($node,$scope) = @_;
+	if (exists $node->{max}) {
+		my $name = $node->{value} . "&lt;";
+		$name .= $node->{max}->visitName($self,$scope);
+		$name .= "&gt;";
+		return $name;
+	} else {
+		return $node->{value};
+	}
+}
+
+sub visitNameFixedPtType {
+	my $self = shift;
+	my($node,$scope) = @_;
+	my $name = $node->{value} . "&lt;";
+	$name .= $node->{d}->visitName($self,$scope);
+	$name .= ",";
+	$name .= $node->{s}->visitName($self,$scope);
+	$name .= "&gt;";
+	return $name;
+}
+
+sub visitNameFixedPtConstType {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $node->{value};
+}
+
+sub visitNameVoidType {
+	my $self = shift;
+	my($node) = @_;
+	return $node->{value};
+}
+
+sub visitNameValueBaseType {
+	my $self = shift;
+	my($node) = @_;
+	return $node->{value};
+}
+
+#
+#	3.12	Exception Declaration
+#
+
+sub visitNameException {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+#
+#	3.13	Operation Declaration
+#
+
+sub visitNameOperation {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+#
+#	3.14	Attribute Declaration
+#
+
+sub visitNameAttribute {
+	my $self = shift;
+	my($node,$scope) = @_;
+	return $self->_get_name($node,$scope);
+}
+
+#
+#
+
+sub _Eval {
+	my $self = shift;
+	my($list_expr,$scope,$type) = @_;
+	my $elt = pop @{$list_expr};
+	unless (ref $elt) {
+		$elt = $self->{symbtab}->Lookup($elt);
+	}
+	if (       $elt->isa('BinaryOp') ) {
+		my $right = $self->_Eval($list_expr,$scope,$type);
+		my $left = $self->_Eval($list_expr,$scope,$type);
+		return "(" . $left . " " . $elt->{op} . " " . $right . ")";
+	} elsif (  $elt->isa('UnaryOp') ) {
+		my $right = $self->_Eval($list_expr,$scope,$type);
+		return $elt->{op} . $right;
+	} elsif (  $elt->isa('Constant')
+			or $elt->isa('Enum')
+			or $elt->isa('Literal') ) {
+		return $elt->visitName($self,$scope,$type);
+	} else {
+		warn __PACKAGE__," _Eval: INTERNAL ERROR ",ref $elt,".\n";
+		return undef;
+	}
+}
+
+sub visitNameExpression {
+	my $self = shift;
+	my($node,$scope) = @_;
+	my @list_expr = @{$node->{list_expr}};		# create a copy
+	return $self->_Eval(\@list_expr,$scope,$node->{type});
+}
+
+sub visitNameEnum {
+	my $self = shift;
+	my($node, $attr) = @_;
+	return $node->{idf};
+}
+
+sub visitNameIntegerLiteral {
+	my $self = shift;
+	my($node) = @_;
+	return $self->_get_lexeme($node);
+}
+
+sub visitNameStringLiteral {
+	my $self = shift;
+	my($node) = @_;
+	my @list = unpack "C*",$node->{value};
+	my $str = "\"";
+	foreach (@list) {
+		if      ($_ < 32 or $_ >= 127) {
+			$str .= sprintf "\\x%02x",$_;
+		} elsif ($_ == ord '&') {
+			$str .= "&amp;";
+		} elsif ($_ == ord '<') {
+			$str .= "&lt;";
+		} elsif ($_ == ord '>') {
+			$str .= "&gt;";
+		} else {
+			$str .= chr $_;
+		}
+	}
+	$str .= "\"";
+	return $str;
+}
+
+sub visitNameWideStringLiteral {
+	my $self = shift;
+	my($node) = @_;
+	my @list = unpack "C*",$node->{value};
+	my $str = "L\"";
+	foreach (@list) {
+		if      ($_ < 32 or ($_ >= 128 and $_ < 256)) {
+			$str .= sprintf "\\x%02x",$_;
+		} elsif ($_ >= 256) {
+			$str .= sprintf "\\u%04x",$_;
+		} elsif ($_ == ord '&') {
+			$str .= "&amp;";
+		} elsif ($_ == ord '<') {
+			$str .= "&lt;";
+		} elsif ($_ == ord '>') {
+			$str .= "&gt;";
+		} else {
+			$str .= chr $_;
+		}
+	}
+	$str .= "\"";
+	return $str;
+}
+
+sub visitNameCharacterLiteral {
+	my $self = shift;
+	my($node) = @_;
+	my @list = unpack "C",$node->{value};
+	my $c = $list[0];
+	my $str = "'";
+	if      ($c < 32 or $c >= 128) {
+		$str .= sprintf "\\x%02x",$c;
+	} elsif ($c == ord '&') {
+		$str .= "&amp;";
+	} elsif ($c == ord '<') {
+		$str .= "&lt;";
+	} elsif ($c == ord '>') {
+		$str .= "&gt;";
+	} else {
+		$str .= chr $c;
+	}
+	$str .= "'";
+	return $str;
+}
+
+sub visitNameWideCharacterLiteral {
+	my $self = shift;
+	my($node) = @_;
+	my @list = unpack "C",$node->{value};
+	my $c = $list[0];
+	my $str = "L'";
+	if      ($c < 32 or ($c >= 128 and $c < 256)) {
+		$str .= sprintf "\\x%02x",$c;
+	} elsif ($c >= 256) {
+		$str .= sprintf "\\u%04x",$c;
+	} elsif ($c == ord '&') {
+		$str .= "&amp;";
+	} elsif ($c == ord '<') {
+		$str .= "&lt;";
+	} elsif ($c == ord '>') {
+		$str .= "&gt;";
+	} else {
+		$str .= chr $c;
+	}
+	$str .= "'";
+	return $str;
+}
+
+sub visitNameFixedPtLiteral {
+	my $self = shift;
+	my($node) = @_;
+	return $self->_get_lexeme($node);
+}
+
+sub visitNameFloatingPtLiteral {
+	my $self = shift;
+	my($node) = @_;
+	return $self->_get_lexeme($node);
+}
+
+sub visitNameBooleanLiteral {
+	my $self = shift;
+	my($node) = @_;
+	return $node->{value};
 }
 
 1;

@@ -2,9 +2,10 @@
 
 use strict;
 use Data::Dumper;
-use CORBA::IDL::parser24;
+use CORBA::IDL::parser30;
 use CORBA::IDL::symbtab;
 # visitors
+use CORBA::IDL::repos_id;
 use CORBA::HTML::index;
 use CORBA::HTML::html;
 
@@ -16,42 +17,54 @@ unless (do "index.lst") {
 }
 
 my $parser = new Parser;
-$parser->YYData->{IDL_version} = '2.4';		# '2.0', '2.1', '2.2', '2.3', '2.4'
 $parser->YYData->{verbose_error} = 1;		# 0, 1
 $parser->YYData->{verbose_warning} = 1;		# 0, 1
 $parser->YYData->{verbose_info} = 1;		# 0, 1
-$parser->YYData->{verbose_deprecated} = 1;	# 0, 1 (concerns only version '2.4')
+$parser->YYData->{verbose_deprecated} = 1;	# 0, 1 (concerns only version '2.4' and upper)
 $parser->YYData->{symbtab} = new Symbtab($parser);
+my $cflags = '-D__idl2html';
+if ($Parser::IDL_version lt '3.0') {
+	$cflags .= ' -D_PRE_3_0_COMPILER_';
+}
 # preprocessor must preserve comments
 if ($^O eq 'MSWin32') {
-	$parser->YYData->{preprocessor} = 'cpp -C -D__idl2html';
-#	$parser->YYData->{preprocessor} = 'CL /E /C /nologo /D__idl2html';	# Microsoft VC
+	$parser->YYData->{preprocessor} = 'cpp -C ' . $cflags;
+#	$parser->YYData->{preprocessor} = 'CL /E /C /nologo ' . $cflags;	# Microsoft VC
 } else {
-	$parser->YYData->{preprocessor} = 'cpp -C -D__idl2html';
+	$parser->YYData->{preprocessor} = 'cpp -C ' . $cflags;
 }
-$parser->getopts("f");
+$parser->getopts("fi:x");
 $parser->Run(@ARGV);
 $parser->YYData->{symbtab}->CheckForward();
+$parser->YYData->{symbtab}->CheckRepositoryID();
 
 if (exists $parser->YYData->{nb_error}) {
 	my $nb = $parser->YYData->{nb_error};
 	print "$nb error(s).\n"
 }
-if (exists $parser->YYData->{nb_warning}) {
+if (        $parser->YYData->{verbose_warning}
+		and exists $parser->YYData->{nb_warning} ) {
 	my $nb = $parser->YYData->{nb_warning};
 	print "$nb warning(s).\n"
 }
-if (exists $parser->YYData->{nb_info}) {
+if (        $parser->YYData->{verbose_info}
+		and exists $parser->YYData->{nb_info} ) {
 	my $nb = $parser->YYData->{nb_info};
 	print "$nb info(s).\n"
 }
-if (exists $parser->YYData->{nb_deprecated}) {
+if (        $parser->YYData->{verbose_deprecated}
+		and exists $parser->YYData->{nb_deprecated} ) {
 	my $nb = $parser->YYData->{nb_deprecated};
 	print "$nb deprecated(s).\n"
 }
 
-if (		exists $parser->YYData->{root}
-		and ! exists $parser->YYData->{nb_error}) {
+if (        exists $parser->YYData->{root}
+		and ! exists $parser->YYData->{nb_error} ) {
+	$parser->YYData->{root}->visitName(new repositoryIdVisitor($parser));	# ?
+	if (        $Parser::IDL_version ge '3.0'
+			and $parser->YYData->{opt_x} ) {
+		$parser->YYData->{symbtab}->Export();
+	}
 	$parser->YYData->{root}->visit(new indexVisitor($parser));
 	$parser->YYData->{root}->visit(new htmlVisitor($parser));
 }
@@ -75,7 +88,7 @@ idl2html [options] I<spec>.idl
 
 =head1 OPTIONS
 
-All options are forwarded to C preprocessor, except -f.
+All options are forwarded to C preprocessor, except -f -i -x.
 
 With the GNU C Compatible Compiler Processor, useful options are :
 
@@ -100,6 +113,14 @@ Specific options :
 =item B<-f>
 
 Enable the frameset mode.
+
+=item B<-i> I<directory>
+
+Specify a path for import (only for version 3.0).
+
+=item B<-x>
+
+Enable export (only for version 3.0).
 
 =back
 
@@ -172,7 +193,7 @@ cpp, javadoc
 
 =head1 COPYRIGHT
 
-(c) 2001-2002 Francois PERRAD, France. All rights reserved.
+(c) 2001-2003 Francois PERRAD, France. All rights reserved.
 
 This program and all CORBA::HTML modules are distributed
 under the terms of the Artistic Licence.

@@ -7,10 +7,6 @@ Description:
 
     idl2html works like javadoc.
 
-TODO:
------
-    - Use of CSS with XHTML.
-
 Prerequisites:
 --------------
     CORBA::IDL

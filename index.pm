@@ -1,6 +1,10 @@
 use strict;
 use UNIVERSAL;
 
+#
+#			Interface Definition Language (OMG IDL CORBA v3.0)
+#
+
 package indexVisitor;
 
 sub new {
@@ -9,6 +13,7 @@ sub new {
 	my $self = {};
 	bless($self, $class);
 	my($parser) = @_;
+	$self->{symbtab} = $parser->YYData->{symbtab};
 	my $filename = $parser->YYData->{srcname};
 	$filename =~ s/^([^\/]+\/)+//;
 	$filename =~ s/\.idl$//i;
@@ -21,8 +26,8 @@ sub new {
 sub _get_name {
 	my $self = shift;
 	my($node) = @_;
-	my @list_name = split /::/,$node->{coll};
-	my @list_scope = split /::/,$self->{scope};
+	my @list_name = split /::/, $node->{full};
+	my @list_scope = split /::/, $self->{scope};
 	shift @list_name;
 	shift @list_scope;
 	while (@list_scope) {
@@ -30,8 +35,18 @@ sub _get_name {
 		shift @list_name;
 		shift @list_scope;
 	}
-	my $name = join '::',@list_name;
+	my $name = join '::', @list_name;
 	return $name;
+}
+
+sub _get_defn {
+	my $self = shift;
+	my($defn) = @_;
+	if (ref $defn) {
+		return $defn;
+	} else {
+		return $self->{symbtab}->Lookup($defn);
+	}
 }
 
 #
@@ -55,8 +70,18 @@ sub visitSpecification {
 	$self->{index_boxed_value} = {};
 	$self->{index_state_member} = {};
 	$self->{index_initializer} = {};
-	foreach (@{$node->{list_decl}}) {
-		$_->visit($self);
+	$self->{index_event} = {};
+	$self->{index_component} = {};
+	$self->{index_provides} = {};
+	$self->{index_uses} = {};
+	$self->{index_publishes} = {};
+	$self->{index_emits} = {};
+	$self->{index_consumes} = {};
+	$self->{index_home} = {};
+	$self->{index_factory} = {};
+	$self->{index_finder} = {};
+	foreach (@{$node->{list_export}}) {
+		$self->{symbtab}->Lookup($_)->visit($self);
 	}
 	# save
 	$node->{index_module} = $self->{index_module};
@@ -70,22 +95,32 @@ sub visitSpecification {
 	$node->{index_boxed_value} = $self->{index_boxed_value};
 	$node->{index_state_member} = $self->{index_state_member};
 	$node->{index_initializer} = $self->{index_initializer};
+	$node->{index_event} = $self->{index_event};
+	$node->{index_component} = $self->{index_component};
+	$node->{index_provides} = $self->{index_provides};
+	$node->{index_uses} = $self->{index_uses};
+	$node->{index_publishes} = $self->{index_publishes};
+	$node->{index_emits} = $self->{index_emits};
+	$node->{index_consumes} = $self->{index_consumes};
+	$node->{index_home} = $self->{index_home};
+	$node->{index_factory} = $self->{index_factory};
+	$node->{index_finder} = $self->{index_finder};
 }
 
 #
-#	3.6		Module Declaration
+#	3.7		Module Declaration
 #
 
-sub visitModule {
+sub visitModules {
 	my $self = shift;
 	my($node) = @_;
-	$self->{scope} = $node->{coll};
-	my $filename = $node->{coll};
+	$self->{scope} = $node->{full};
+	my $filename = $node->{full};
 	$filename =~ s/::/_/g;
 	$filename .= '.html';
 	$self->{index_module}->{$node->{idf}} = $node;
-	$self->{save_module}->{$node->{coll}} = {}
-			unless (exists $self->{save_module}->{$node->{coll}});
+	$self->{save_module}->{$node->{full}} = {}
+			unless (exists $self->{save_module}->{$node->{full}});
 	# local save
 	my $file_html = $self->{file_html};
 	my $module = $self->{index_module};
@@ -99,21 +134,41 @@ sub visitModule {
 	my $boxed_value = $self->{index_boxed_value};
 	my $state_member = $self->{index_state_member};
 	my $initializer = $self->{index_initializer};
+	my $event = $self->{index_event};
+	my $component = $self->{index_component};
+	my $provides = $self->{index_provides};
+	my $uses = $self->{index_uses};
+	my $publishes = $self->{index_publishes};
+	my $emits = $self->{index_emits};
+	my $consumes = $self->{index_consumes};
+	my $home = $self->{index_home};
+	my $factory = $self->{index_factory};
+	my $finder = $self->{index_finder};
 	# re init
 	$self->{file_html} = $filename;
-	$self->{index_module} = $self->{save_module}->{$node->{coll}}->{index_module} || {};
-	$self->{index_interface} = $self->{save_module}->{$node->{coll}}->{index_interface} || {};
-	$self->{index_operation} = $self->{save_module}->{$node->{coll}}->{index_operation} || {};
-	$self->{index_attribute} = $self->{save_module}->{$node->{coll}}->{index_attribute} || {};
-	$self->{index_constant} = $self->{save_module}->{$node->{coll}}->{index_constant} || {};
-	$self->{index_exception} = $self->{save_module}->{$node->{coll}}->{index_exception} || {};
-	$self->{index_type} = $self->{save_module}->{$node->{coll}}->{index_type} || {};
-	$self->{index_value} = $self->{save_module}->{$node->{coll}}->{index_value} || {};
-	$self->{index_boxed_value} = $self->{save_module}->{$node->{coll}}->{index_boxed_value} || {};
-	$self->{index_state_member} = $self->{save_module}->{$node->{coll}}->{index_state_member} || {};
-	$self->{index_initializer} = $self->{save_module}->{$node->{coll}}->{index_initializer} || {};
-	foreach (@{$node->{list_decl}}) {
-		$_->visit($self);
+	$self->{index_module} = $self->{save_module}->{$node->{full}}->{index_module} || {};
+	$self->{index_interface} = $self->{save_module}->{$node->{full}}->{index_interface} || {};
+	$self->{index_operation} = $self->{save_module}->{$node->{full}}->{index_operation} || {};
+	$self->{index_attribute} = $self->{save_module}->{$node->{full}}->{index_attribute} || {};
+	$self->{index_constant} = $self->{save_module}->{$node->{full}}->{index_constant} || {};
+	$self->{index_exception} = $self->{save_module}->{$node->{full}}->{index_exception} || {};
+	$self->{index_type} = $self->{save_module}->{$node->{full}}->{index_type} || {};
+	$self->{index_value} = $self->{save_module}->{$node->{full}}->{index_value} || {};
+	$self->{index_boxed_value} = $self->{save_module}->{$node->{full}}->{index_boxed_value} || {};
+	$self->{index_state_member} = $self->{save_module}->{$node->{full}}->{index_state_member} || {};
+	$self->{index_initializer} = $self->{save_module}->{$node->{full}}->{index_initializer} || {};
+	$self->{index_event} = $self->{save_module}->{$node->{full}}->{index_event} || {};
+	$self->{index_component} = $self->{save_module}->{$node->{full}}->{index_component} || {};
+	$self->{index_provides} = $self->{save_module}->{$node->{full}}->{index_provides} || {};
+	$self->{index_uses} = $self->{save_module}->{$node->{full}}->{index_uses} || {};
+	$self->{index_publishes} = $self->{save_module}->{$node->{full}}->{index_publishes} || {};
+	$self->{index_emits} = $self->{save_module}->{$node->{full}}->{index_emits} || {};
+	$self->{index_consumes} = $self->{save_module}->{$node->{full}}->{index_consumes} || {};
+	$self->{index_home} = $self->{save_module}->{$node->{full}}->{index_home} || {};
+	$self->{index_factory} = $self->{save_module}->{$node->{full}}->{index_factory} || {};
+	$self->{index_finder} = $self->{save_module}->{$node->{full}}->{index_finder} || {};
+	foreach (@{$node->{list_export}}) {
+		$self->{symbtab}->Lookup($_)->visit($self);
 	}
 	$node->{file_html} = $self->{file_html};
 	$node->{index_module} = $self->{index_module};
@@ -127,19 +182,39 @@ sub visitModule {
 	$node->{index_boxed_value} = $self->{index_boxed_value};
 	$node->{index_state_member} = $self->{index_state_member};
 	$node->{index_initializer} = $self->{index_initializer};
+	$node->{index_event} = $self->{index_event};
+	$node->{index_component} = $self->{index_component};
+	$node->{index_provides} = $self->{index_provides};
+	$node->{index_uses} = $self->{index_uses};
+	$node->{index_publishes} = $self->{index_publishes};
+	$node->{index_emits} = $self->{index_emits};
+	$node->{index_consumes} = $self->{index_consumes};
+	$node->{index_home} = $self->{index_home};
+	$node->{index_factory} = $self->{index_factory};
+	$node->{index_finder} = $self->{index_finder};
 	#
-	$self->{save_module}->{$node->{coll}}->{file_html} = $self->{file_html};
-	$self->{save_module}->{$node->{coll}}->{index_module} = $self->{index_module};
-	$self->{save_module}->{$node->{coll}}->{index_interface} = $self->{index_interface};
-	$self->{save_module}->{$node->{coll}}->{index_operation} = $self->{index_operation};
-	$self->{save_module}->{$node->{coll}}->{index_attribute} = $self->{index_attribute};
-	$self->{save_module}->{$node->{coll}}->{index_constant} = $self->{index_constant};
-	$self->{save_module}->{$node->{coll}}->{index_exception} = $self->{index_exception};
-	$self->{save_module}->{$node->{coll}}->{index_type} = $self->{index_type};
-	$self->{save_module}->{$node->{coll}}->{index_value} = $self->{index_value};
-	$self->{save_module}->{$node->{coll}}->{index_boxed_value} = $self->{index_boxed_value};
-	$self->{save_module}->{$node->{coll}}->{index_state_member} = $self->{index_state_member};
-	$self->{save_module}->{$node->{coll}}->{index_initializer} = $self->{index_initializer};
+	$self->{save_module}->{$node->{full}}->{file_html} = $self->{file_html};
+	$self->{save_module}->{$node->{full}}->{index_module} = $self->{index_module};
+	$self->{save_module}->{$node->{full}}->{index_interface} = $self->{index_interface};
+	$self->{save_module}->{$node->{full}}->{index_operation} = $self->{index_operation};
+	$self->{save_module}->{$node->{full}}->{index_attribute} = $self->{index_attribute};
+	$self->{save_module}->{$node->{full}}->{index_constant} = $self->{index_constant};
+	$self->{save_module}->{$node->{full}}->{index_exception} = $self->{index_exception};
+	$self->{save_module}->{$node->{full}}->{index_type} = $self->{index_type};
+	$self->{save_module}->{$node->{full}}->{index_value} = $self->{index_value};
+	$self->{save_module}->{$node->{full}}->{index_boxed_value} = $self->{index_boxed_value};
+	$self->{save_module}->{$node->{full}}->{index_state_member} = $self->{index_state_member};
+	$self->{save_module}->{$node->{full}}->{index_initializer} = $self->{index_initializer};
+	$self->{save_module}->{$node->{full}}->{index_event} = $self->{index_event};
+	$self->{save_module}->{$node->{full}}->{index_component} = $self->{index_component};
+	$self->{save_module}->{$node->{full}}->{index_provides} = $self->{index_provides};
+	$self->{save_module}->{$node->{full}}->{index_uses} = $self->{index_uses};
+	$self->{save_module}->{$node->{full}}->{index_publishes} = $self->{index_publishes};
+	$self->{save_module}->{$node->{full}}->{index_emits} = $self->{index_emits};
+	$self->{save_module}->{$node->{full}}->{index_consumes} = $self->{index_consumes};
+	$self->{save_module}->{$node->{full}}->{index_home} = $self->{index_home};
+	$self->{save_module}->{$node->{full}}->{index_factory} = $self->{index_factory};
+	$self->{save_module}->{$node->{full}}->{index_finder} = $self->{index_finder};
 	# restore
 	$self->{file_html} = $file_html;
 	$self->{index_module} = $module;
@@ -153,21 +228,30 @@ sub visitModule {
 	$self->{index_boxed_value} = $boxed_value;
 	$self->{index_state_member} = $state_member;
 	$self->{index_initializer} = $initializer;
+	$self->{index_event} = $event;
+	$self->{index_component} = $component;
+	$self->{index_provides} = $provides;
+	$self->{index_uses} = $uses;
+	$self->{index_publishes} = $publishes;
+	$self->{index_emits} = $emits;
+	$self->{index_consumes} = $consumes;
+	$self->{index_home} = $home;
+	$self->{index_factory} = $factory;
+	$self->{index_finder} = $finder;
 }
 
 #
-#	3.7		Interface Declaration
+#	3.8		Interface Declaration
 #
 
-sub visitInterface {
+sub _visitBaseInterface {
 	my $self = shift;
 	my($node) = @_;
-	$self->{scope} = $node->{coll};
-	my $filename = $node->{coll};
+	$self->{scope} = $node->{full};
+	my $filename = $node->{full};
 	$filename =~ s/::/_/g;
 	$filename .= '.html';
 	$node->{file_html} = $filename;
-	$self->{index_interface}->{$node->{idf}} = $node;
 	# local save
 	my $file_html = $self->{file_html};
 	my $module = $self->{index_module};
@@ -181,82 +265,16 @@ sub visitInterface {
 	my $boxed_value = $self->{index_boxed_value};
 	my $state_member = $self->{index_state_member};
 	my $initializer = $self->{index_initializer};
-	# re init
-	$self->{file_html} = $filename;
-	$self->{index_module} = {};
-	$self->{index_interface} = {};
-	$self->{index_operation} = {};
-	$self->{index_attribute} = {};
-	$self->{index_constant} = {};
-	$self->{index_exception} = {};
-	$self->{index_type} = {};
-	$self->{index_value} = {};
-	$self->{index_boxed_value} = {};
-	$self->{index_state_member} = {};
-	$self->{index_initializer} = {};
-	foreach (@{$node->{list_decl}}) {
-		$_->visit($self);
-	}
-	$node->{file_html} = $self->{file_html};
-	$node->{index_module} = $self->{index_module};
-	$node->{index_interface} = $self->{index_interface};
-	$node->{index_operation} = $self->{index_operation};
-	$node->{index_attribute} = $self->{index_attribute};
-	$node->{index_constant} = $self->{index_constant};
-	$node->{index_exception} = $self->{index_exception};
-	$node->{index_type} = $self->{index_type};
-	$node->{index_value} = $self->{index_value};
-	$node->{index_boxed_value} = $self->{index_boxed_value};
-	$node->{index_state_member} = $self->{index_state_member};
-	$node->{index_initializer} = $self->{index_initializer};
-	# restore
-	$self->{file_html} = $file_html;
-	$self->{index_module} = $module;
-	$self->{index_interface} = $interface;
-	$self->{index_operation} = $operation;
-	$self->{index_attribute} = $attribute;
-	$self->{index_constant} = $constant;
-	$self->{index_exception} = $exception;
-	$self->{index_type} = $type;
-	$self->{index_value} = $value;
-	$self->{index_boxed_value} = $boxed_value;
-	$self->{index_state_member} = $state_member;
-	$self->{index_initializer} = $initializer;
-}
-
-sub visitForwardInterface {
-	my $self = shift;
-	my($node) = @_;
-}
-
-#
-#	3.8		Value Declaration
-#
-#	3.8.1	Regular Value Type
-#
-
-sub visitRegularValue {
-	my $self = shift;
-	my($node) = @_;
-	$self->{scope} = $node->{coll};
-	my $filename = $node->{coll};
-	$filename =~ s/::/_/g;
-	$filename .= '.html';
-	$node->{file_html} = $filename;
-	$self->{index_value}->{$node->{idf}} = $node;
-	# local save
-	my $file_html = $self->{file_html};
-	my $module = $self->{index_module};
-	my $interface = $self->{index_interface};
-	my $operation = $self->{index_operation};
-	my $attribute = $self->{index_attribute};
-	my $constant = $self->{index_constant};
-	my $exception = $self->{index_exception};
-	my $type = $self->{index_type};
-	my $value = $self->{index_value};
-	my $boxed_value = $self->{index_boxed_value};
-	my $state_member = $self->{index_state_member};
-	my $initializer = $self->{index_initializer};
+	my $event = $self->{index_event};
+	my $component = $self->{index_component};
+	my $provides = $self->{index_provides};
+	my $uses = $self->{index_uses};
+	my $publishes = $self->{index_publishes};
+	my $emits = $self->{index_emits};
+	my $consumes = $self->{index_consumes};
+	my $home = $self->{index_home};
+	my $factory = $self->{index_factory};
+	my $finder = $self->{index_finder};
 	# init
 	$self->{file_html} = $filename;
 	$self->{index_module} = {};
@@ -270,8 +288,18 @@ sub visitRegularValue {
 	$self->{index_boxed_value} = {};
 	$self->{index_state_member} = {};
 	$self->{index_initializer} = {};
-	foreach (@{$node->{list_decl}}) {
-		$_->visit($self);
+	$self->{index_event} = {};
+	$self->{index_component} = {};
+	$self->{index_provides} = {};
+	$self->{index_uses} = {};
+	$self->{index_publishes} = {};
+	$self->{index_emits} = {};
+	$self->{index_consumes} = {};
+	$self->{index_home} = {};
+	$self->{index_factory} = {};
+	$self->{index_finder} = {};
+	foreach (@{$node->{list_export}}) {
+		$self->{symbtab}->Lookup($_)->visit($self);
 	}
 	$node->{file_html} = $self->{file_html};
 	$node->{index_module} = $self->{index_module};
@@ -285,6 +313,16 @@ sub visitRegularValue {
 	$node->{index_boxed_value} = $self->{index_boxed_value};
 	$node->{index_state_member} = $self->{index_state_member};
 	$node->{index_initializer} = $self->{index_initializer};
+	$node->{index_event} = $self->{index_event};
+	$node->{index_component} = $self->{index_component};
+	$node->{index_provides} = $self->{index_provides};
+	$node->{index_uses} = $self->{index_uses};
+	$node->{index_publishes} = $self->{index_publishes};
+	$node->{index_emits} = $self->{index_emits};
+	$node->{index_consumes} = $self->{index_consumes};
+	$node->{index_home} = $self->{index_home};
+	$node->{index_factory} = $self->{index_factory};
+	$node->{index_finder} = $self->{index_finder};
 	# restore
 	$self->{file_html} = $file_html;
 	$self->{index_module} = $module;
@@ -298,14 +336,48 @@ sub visitRegularValue {
 	$self->{index_boxed_value} = $boxed_value;
 	$self->{index_state_member} = $state_member;
 	$self->{index_initializer} = $initializer;
+	$self->{index_event} = $event;
+	$self->{index_component} = $component;
+	$self->{index_provides} = $provides;
+	$self->{index_uses} = $uses;
+	$self->{index_publishes} = $publishes;
+	$self->{index_emits} = $emits;
+	$self->{index_consumes} = $consumes;
+	$self->{index_home} = $home;
+	$self->{index_factory} = $factory;
+	$self->{index_finder} = $finder;
 }
 
-sub visitStateMembers {
+sub visitRegularInterface {
 	my $self = shift;
 	my($node) = @_;
-	foreach (@{$node->{list_value}}) {
-		$_->visit($self);
-	}
+	$self->{index_interface}->{$node->{idf}} = $node;
+	$self->_visitBaseInterface($node);
+}
+
+sub visitAbstractInterface {
+	my $self = shift;
+	my($node) = @_;
+	$self->{index_interface}->{$node->{idf}} = $node;
+	$self->_visitBaseInterface($node);
+}
+
+sub visitLocalInterface {
+	my $self = shift;
+	my($node) = @_;
+	$self->{index_interface}->{$node->{idf}} = $node;
+	$self->_visitBaseInterface($node);
+}
+
+#
+#	3.9		Value Declaration
+#
+
+sub visitRegularValue {
+	my $self = shift;
+	my($node) = @_;
+	$self->{index_value}->{$node->{idf}} = $node;
+	$self->_visitBaseInterface($node);
 }
 
 sub visitStateMember {
@@ -315,16 +387,12 @@ sub visitStateMember {
 	$self->{index_state_member}->{$node->{idf}} = $node;
 }
 
-sub visitFactory {
+sub visitInitializer {
 	my $self = shift;
 	my($node) = @_;
 	$node->{file_html} = $self->{file_html};
 	$self->{index_initializer}->{$node->{idf}} = $node;
 }
-
-#
-#	3.8.2	Boxed Value Type
-#
 
 sub visitBoxedValue {
 	my $self = shift;
@@ -333,91 +401,15 @@ sub visitBoxedValue {
 	$self->{index_boxed_value}->{$node->{idf}} = $node;
 }
 
-#
-#	3.8.3	Abstract Value Type
-#
-
 sub visitAbstractValue {
 	my $self = shift;
 	my($node) = @_;
-	$self->{scope} = $node->{coll};
-	my $filename = $node->{coll};
-	$filename =~ s/::/_/g;
-	$filename .= '.html';
-	$node->{file_html} = $filename;
 	$self->{index_value}->{$node->{idf}} = $node;
-	# local save
-	my $file_html = $self->{file_html};
-	my $module = $self->{index_module};
-	my $interface = $self->{index_interface};
-	my $operation = $self->{index_operation};
-	my $attribute = $self->{index_attribute};
-	my $constant = $self->{index_constant};
-	my $exception = $self->{index_exception};
-	my $type = $self->{index_type};
-	my $value = $self->{index_value};
-	my $boxed_value = $self->{index_boxed_value};
-	my $state_member = $self->{index_state_member};
-	my $initializer = $self->{index_initializer};
-	# init
-	$self->{file_html} = $filename;
-	$self->{index_module} = {};
-	$self->{index_interface} = {};
-	$self->{index_operation} = {};
-	$self->{index_attribute} = {};
-	$self->{index_constant} = {};
-	$self->{index_exception} = {};
-	$self->{index_type} = {};
-	$self->{index_value} = {};
-	$self->{index_boxed_value} = {};
-	$self->{index_state_member} = {};
-	$self->{index_initializer} = {};
-	foreach (@{$node->{list_decl}}) {
-		$_->visit($self);
-	}
-	$node->{file_html} = $self->{file_html};
-	$node->{index_module} = $self->{index_module};
-	$node->{index_interface} = $self->{index_interface};
-	$node->{index_operation} = $self->{index_operation};
-	$node->{index_attribute} = $self->{index_attribute};
-	$node->{index_constant} = $self->{index_constant};
-	$node->{index_exception} = $self->{index_exception};
-	$node->{index_type} = $self->{index_type};
-	$node->{index_value} = $self->{index_value};
-	$node->{index_boxed_value} = $self->{index_boxed_value};
-	$node->{index_state_member} = $self->{index_state_member};
-	$node->{index_initializer} = $self->{index_initializer};
-	# restore
-	$self->{file_html} = $file_html;
-	$self->{index_module} = $module;
-	$self->{index_interface} = $interface;
-	$self->{index_operation} = $operation;
-	$self->{index_attribute} = $attribute;
-	$self->{index_constant} = $constant;
-	$self->{index_exception} = $exception;
-	$self->{index_type} = $type;
-	$self->{index_value} = $value;
-	$self->{index_boxed_value} = $boxed_value;
-	$self->{index_state_member} = $state_member;
-	$self->{index_initializer} = $initializer;
+	$self->_visitBaseInterface($node);
 }
 
 #
-#	3.8.4	Value Forward Declaration
-#
-
-sub visitForwardRegularValue {
-	my $self = shift;
-	my($node) = @_;
-}
-
-sub visitForwardAbstractValue {
-	my $self = shift;
-	my($node) = @_;
-}
-
-#
-#	3.9		Constant Declaration
+#	3.10	Constant Declaration
 #
 
 sub visitConstant {
@@ -428,51 +420,44 @@ sub visitConstant {
 }
 
 #
-#	3.10	Type Declaration
+#	3.11	Type Declaration
 #
-
-sub visitTypeDeclarators {
-	my $self = shift;
-	my($node) = @_;
-	foreach (@{$node->{list_value}}) {
-		$_->visit($self);
-	}
-}
 
 sub visitTypeDeclarator {
 	my $self = shift;
 	my($node) = @_;
 	$node->{file_html} = $self->{file_html};
 	$self->{index_type}->{$node->{idf}} = $node;
-	return if (exists $node->{modifier});	# native IDL2.2
-	if (	   $node->{type}->isa('StructType')
-			or $node->{type}->isa('UnionType')
-			or $node->{type}->isa('EnumType') ) {
-		$node->{type}->visit($self);
+	return if (exists $node->{modifier});	# native
+	my $type = $self->_get_defn($node->{type});
+	if (	   $type->isa('StructType')
+			or $type->isa('UnionType')
+			or $type->isa('EnumType') ) {
+		$type->visit($self);
 	}
 }
 
-#
-#	3.10.2	Constructed Types
+#	3.11.2	Constructed Types
 #
 
 sub visitStructType {
 	my $self = shift;
 	my($node) = @_;
-	return if (exists $self->{done_hash}->{$node->{coll}});
-	$self->{done_hash}->{$node->{coll}} = 1;
+	return if (exists $self->{done_hash}->{$node->{full}});
+	$self->{done_hash}->{$node->{full}} = 1;
 	my $name = $self->_get_name($node);
 	$self->{index_type}->{$name} = $node;
 	$node->{html_name} = $name;
 	$node->{file_html} = $self->{file_html};
 	foreach (@{$node->{list_expr}}) {
-		if (	   $_->{type}->isa('StructType')
-				or $_->{type}->isa('UnionType') ) {
-			$_->{type}->visit($self);
+		my $type = $self->_get_defn($_->{type});
+		if (	   $type->isa('StructType')
+				or $type->isa('UnionType') ) {
+			$type->visit($self);
 		}
 	}
 	foreach (@{$node->{list_value}}) {
-		$_->visit($self);				# single or array
+		$self->_get_defn($_)->visit($self);		# single or array
 	}
 }
 
@@ -493,21 +478,23 @@ sub visitSingle {
 sub visitUnionType {
 	my $self = shift;
 	my($node) = @_;
-	return if (exists $self->{done_hash}->{$node->{coll}});
-	$self->{done_hash}->{$node->{coll}} = 1;
+	return if (exists $self->{done_hash}->{$node->{full}});
+	$self->{done_hash}->{$node->{full}} = 1;
 	my $name = $self->_get_name($node);
 	$self->{index_type}->{$name} = $node;
 	$node->{html_name} = $name;
 	$node->{file_html} = $self->{file_html};
-	if ($node->{type}->isa('EnumType')) {
-		$node->{type}->visit($self);
+	my $type = $self->_get_defn($node->{type});
+	if ($type->isa('EnumType')) {
+		$type->visit($self);
 	}
 	foreach (@{$node->{list_expr}}) {	# case
-		if (	   $_->{element}->{type}->isa('StructType')
-				or $_->{element}->{type}->isa('UnionType') ) {
-			$_->{element}->{type}->visit($self);
+		$type = $self->_get_defn($_->{element}->{type});
+		if (	   $type->isa('StructType')
+				or $type->isa('UnionType') ) {
+			$type->visit($self);
 		}
-		$_->{element}->{value}->visit($self);	# array or single
+		$self->_get_defn($_->{element}->{value})->visit($self);		# single or array
 	}
 }
 
@@ -531,21 +518,7 @@ sub visitEnum {
 }
 
 #
-#	3.10.3	Constructed Recursive Types and Forward Declarations
-#
-
-sub visitForwardStructType {
-	my $self = shift;
-	my($node) = @_;
-}
-
-sub visitForwardUnionType {
-	my $self = shift;
-	my($node) = @_;
-}
-
-#
-#	3.11	Exception Declaration
+#	3.12	Exception Declaration
 #
 
 sub visitException {
@@ -554,12 +527,12 @@ sub visitException {
 	$node->{file_html} = $self->{file_html};
 	$self->{index_exception}->{$node->{idf}} = $node;
 	foreach (@{$node->{list_value}}) {
-		$_->visit($self);				# single or array
+		$self->_get_defn($_)->visit($self);		# single or array
 	}
 }
 
 #
-#	3.12	Operation Declaration
+#	3.13	Operation Declaration
 #
 
 sub visitOperation {
@@ -570,22 +543,103 @@ sub visitOperation {
 }
 
 #
-#	3.13	Attribute Declaration
+#	3.14	Attribute Declaration
 #
-
-sub visitAttributes {
-	my $self = shift;
-	my($node) = @_;
-	foreach (@{$node->{list_value}}) {
-		$_->visit($self);				# attribute
-	}
-}
 
 sub visitAttribute {
 	my $self = shift;
 	my($node) = @_;
 	$node->{file_html} = $self->{file_html};
 	$self->{index_attribute}->{$node->{idf}} = $node;
+}
+
+#
+#	3.16	Event Declaration
+#
+
+sub visitRegularEvent {
+	my $self = shift;
+	my($node) = @_;
+	$self->{index_event}->{$node->{idf}} = $node;
+	$self->_visitBaseInterface($node);
+}
+
+sub visitAbstractEvent {
+	my $self = shift;
+	my($node) = @_;
+	$self->{index_event}->{$node->{idf}} = $node;
+	$self->_visitBaseInterface($node);
+}
+
+#
+#	3.17	Component Declaration
+#
+
+sub visitComponent {
+	my $self = shift;
+	my($node) = @_;
+	$self->{index_component}->{$node->{idf}} = $node;
+	$self->_visitBaseInterface($node);
+}
+
+sub visitProvides {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$self->{index_provides}->{$node->{idf}} = $node;
+}
+
+sub visitUses {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$self->{index_uses}->{$node->{idf}} = $node;
+}
+
+sub visitPublishes {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$self->{index_publishes}->{$node->{idf}} = $node;
+}
+
+sub visitEmits {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$self->{index_emits}->{$node->{idf}} = $node;
+}
+
+sub visitConsumes {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$self->{index_consumes}->{$node->{idf}} = $node;
+}
+
+#
+#	3.18	Home Declaration
+#
+
+sub visitHome {
+	my $self = shift;
+	my($node) = @_;
+	$self->{index_home}->{$node->{idf}} = $node;
+	$self->_visitBaseInterface($node);
+}
+
+sub visitFactory {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$self->{index_factory}->{$node->{idf}} = $node;
+}
+
+sub visitFinder {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$self->{index_finder}->{$node->{idf}} = $node;
 }
 
 1;
