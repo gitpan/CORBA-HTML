@@ -6,7 +6,6 @@ use CORBA::IDL::parser30;
 use CORBA::IDL::symbtab;
 # visitors
 use CORBA::IDL::repos_id;
-#use CORBA::HTML::file;
 use CORBA::HTML::index;
 use CORBA::HTML::html;
 
@@ -37,11 +36,11 @@ if ($^O eq 'MSWin32') {
 }
 $parser->getopts("fhi:o:t:vx");
 if ($parser->YYData->{opt_v}) {
-	print "CORBA::HTML $CORBA::HTML::htmlVisitor::VERSION\n";
-	print "CORBA::IDL $CORBA::IDL::VERSION\n";
+	print "CORBA::HTML $CORBA::HTML::html::VERSION\n";
+	print "CORBA::IDL $CORBA::IDL::node::VERSION\n";
 	print "IDL $Parser::IDL_version\n";
 	print "$0\n";
-	print "Perl $]\n";
+	print "Perl $] on $^O\n";
 	exit;
 }
 if ($parser->YYData->{opt_h}) {

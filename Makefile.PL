@@ -6,7 +6,7 @@ WriteMakefile(
     'VERSION_FROM'  => 'html.pm',
     'ABSTRACT'      => 'HTML generator from IDL file',
     'PREREQ_PM'     => {
-                        'CORBA::IDL::node'  => 2.20,
+                        'CORBA::IDL::node'  => 2.21,
     },
     'PM'            => {
                         'html.pm'       => '$(INST_LIBDIR)/HTML/html.pm',
