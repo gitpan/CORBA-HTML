@@ -9,7 +9,6 @@ Description:
 
 TODO:
 -----
-    - Special tags embedded in an IDL doc comment (like : @version, @author).
     - Use of CSS with XHTML.
 
 Prerequisites:

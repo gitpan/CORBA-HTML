@@ -27,7 +27,7 @@ if ($^O eq 'MSWin32') {
 	$parser->YYData->{preprocessor} = 'cpp -C -D__idl2html';
 #	$parser->YYData->{preprocessor} = 'CL /E /C /nologo /D__idl2html';	# Microsoft VC
 } else {
-	$parser->YYData->{preprocessor} = './cpp -C -D__idl2html';
+	$parser->YYData->{preprocessor} = 'cpp -C -D__idl2html';
 }
 $parser->Run(@ARGV);
 $parser->YYData->{symbtab}->CheckForward();
@@ -109,13 +109,15 @@ B<idl2html> reformats and displays declaration for:
 
 =item Modules, interfaces and value types
 
-=item Operations and attributes
+=item Operations (with parameters) and attributes
 
-=item Types (typedef, enum, struct, union)
+=item Types (typedef, enum, struct, union with members)
 
-=item Exceptions
+=item Exceptions (with members)
 
 =item Constants
+
+=item Pragma (ID, version as tag)
 
 =back
 
@@ -129,11 +131,11 @@ Doc comments immediately preceed the entity being documented.
 =head2 Standard HTML
 
 You can embed standard HTML tags within a doc comment. However, don't use tags
-heading tags like E<lt>H1E<gt> or E<lt>HRE<gt>. B<idl2html> creates an entire
+heading tags like E<lt>h1E<gt> or E<lt>hrE<gt>. B<idl2html> creates an entire
 structured document and these structural tags interfere with formatting of
 the generated document.
 
-=head2 idl2html Tags (not yet implemented)
+=head2 idl2html Tags
 
 B<idl2html> parses special tags that are recognized when they are embedded
 within an IDL doc comment. These doc tags enable you to autogenerate a
@@ -144,7 +146,7 @@ Tags must start at the beginning of a line.
 
 =head1 SPECIAL REQUIREMENTS
 
-B<idl2html> needs Math::BigInt and CORBA::Fixed modules.
+B<idl2html> needs Math::BigInt and Math::BigFloat modules.
 
 B<idl2html> needs a B<cpp> executable or B<CL.EXE> for Microsoft Windows.
 
@@ -157,7 +159,7 @@ cpp, javadoc, perl
 
 =head1 AUTHOR
 
-Francois PERRAD E<lt>perrad@besancon.sema.slb.comE<gt>
+Francois PERRAD
 
 =cut
 

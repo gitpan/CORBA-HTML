@@ -1,5 +1,9 @@
 Revision history for Perl extension CORBA::HTML.
 
+1.0   Mon Jan 20 20:00:00 2002
+	- Add special tags (@version, @author)
+	- Add hyperlink to e-mail, www and IDL symbol 
+
 0.90  Fri Dec 14 15:30:00 2001
 	- first version
 
