@@ -1,0 +1,163 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Data::Dumper;
+use CORBA::IDL::parser24;
+use CORBA::IDL::symbtab;
+# visitors
+use CORBA::HTML::index;
+use CORBA::HTML::html;
+
+use vars qw ($global);
+unless (do "index.lst") {
+	$global->{index_module} = {};
+	$global->{index_interface} = {};
+	$global->{index_value} = {};
+}
+
+my $parser = new Parser;
+$parser->YYData->{IDL_version} = '2.4';		# '2.0', '2.1', '2.2', '2.3', '2.4'
+$parser->YYData->{verbose_error} = 1;		# 0, 1
+$parser->YYData->{verbose_warning} = 1;		# 0, 1
+$parser->YYData->{verbose_info} = 1;		# 0, 1
+$parser->YYData->{verbose_deprecated} = 1;	# 0, 1 (concerns only version '2.4')
+$parser->YYData->{symbtab} = new Symbtab($parser);
+# preprocessor must preserve comments
+if ($^O eq 'MSWin32') {
+	$parser->YYData->{preprocessor} = 'cpp -C -D__idl2html';
+#	$parser->YYData->{preprocessor} = 'CL /E /C /nologo /D__idl2html';	# Microsoft VC
+} else {
+	$parser->YYData->{preprocessor} = './cpp -C -D__idl2html';
+}
+$parser->Run(@ARGV);
+$parser->YYData->{symbtab}->CheckForward();
+
+if (exists $parser->YYData->{nb_error}) {
+	my $nb = $parser->YYData->{nb_error};
+	print "$nb error(s).\n"
+}
+if (exists $parser->YYData->{nb_warning}) {
+	my $nb = $parser->YYData->{nb_warning};
+	print "$nb warning(s).\n"
+}
+if (exists $parser->YYData->{nb_info}) {
+	my $nb = $parser->YYData->{nb_info};
+	print "$nb info(s).\n"
+}
+if (exists $parser->YYData->{nb_deprecated}) {
+	my $nb = $parser->YYData->{nb_deprecated};
+	print "$nb deprecated(s).\n"
+}
+
+if (		exists $parser->YYData->{root}
+		and ! exists $parser->YYData->{nb_error}) {
+	$parser->YYData->{root}->visit(new indexVisitor($parser));
+	$parser->YYData->{root}->visit(new htmlVisitor($parser));
+}
+
+if (open PERSISTANCE,"> index.lst") {
+	print PERSISTANCE Data::Dumper->Dump([$global], [qw(global)]);
+	close PERSISTANCE;
+} else {
+	warn "can't open index.lst.\n";
+}
+
+__END__
+
+=head1 NAME
+
+idl2html - Generates HTML documentation from IDL source files.
+
+=head1 SYNOPSYS
+
+idl2html [options] I<spec>.idl
+
+=head1 OPTIONS
+
+All options are forwarded to C preprocessor.
+
+With the GNU C Compatible Compiler Processor, useful options are :
+
+=over 8
+
+=item B<-D> I<name>
+
+=item B<-D> I<name>=I<definition>
+
+=item B<-I> I<directory>
+
+=item B<-I->
+
+=item B<-nostdinc>
+
+=back
+
+=head1 DESCRIPTION
+
+B<idl2html> parses the declarations and doc comments in a IDL source file and
+formats these into a set of HTML pages.
+
+B<idl2html> works like B<javadoc>.
+
+Within doc comments, B<idl2html> supports the use of special doc tags to
+augment the documentation. B<idl2html> also supports standard HTML within doc
+comments. This is useful for formatting text.
+
+B<idl2html> reformats and displays declaration for:
+
+=over 8
+
+=item Modules, interfaces and value types
+
+=item Operations and attributes
+
+=item Types (typedef, enum, struct, union)
+
+=item Exceptions
+
+=item Constants
+
+=back
+
+=head2 Doc Comments
+
+IDL source files can include doc comments. Doc comments begin  with /** and
+indicate text to be included automatically in generated documentation.
+
+Doc comments immediately preceed the entity being documented.
+
+=head2 Standard HTML
+
+You can embed standard HTML tags within a doc comment. However, don't use tags
+heading tags like E<lt>H1E<gt> or E<lt>HRE<gt>. B<idl2html> creates an entire
+structured document and these structural tags interfere with formatting of
+the generated document.
+
+=head2 idl2html Tags (not yet implemented)
+
+B<idl2html> parses special tags that are recognized when they are embedded
+within an IDL doc comment. These doc tags enable you to autogenerate a
+complete, well-formatted document from your source code. The tags start with
+an @.
+
+Tags must start at the beginning of a line.
+
+=head1 SPECIAL REQUIREMENTS
+
+B<idl2html> needs Math::BigInt and CORBA::Fixed modules.
+
+B<idl2html> needs a B<cpp> executable or B<CL.EXE> for Microsoft Windows.
+
+CORBA Specifications, including IDL (Interface Definition Language)
+ are available on E<lt>http://www.omg.org/E<gt>.
+
+=head1 SEE ALSO
+
+cpp, javadoc, perl
+
+=head1 AUTHOR
+
+Francois PERRAD E<lt>perrad@besancon.sema.slb.comE<gt>
+
+=cut
+
