@@ -8,7 +8,7 @@ use UNIVERSAL;
 package CORBA::HTML::html;
 
 use vars qw($VERSION);
-$VERSION = '2.40';
+$VERSION = '2.41';
 
 package CORBA::HTML::htmlVisitor;
 
@@ -473,7 +473,7 @@ sub visitSpecification {
 
 		foreach my $scope (values %{$self->{symbtab}->{scopes}}) {
 			foreach my $defn (values %{$scope->{entry}}) {
-#				next unless (exists $defn->{file_html});
+				next unless (exists $defn->{file_html});
 				if (       $defn->isa('StateMember')
 						or $defn->isa('Initializer')
 						or $defn->isa('BoxedValue')
@@ -2349,6 +2349,12 @@ sub _get_name {
 	$fragment = $node->{html_name} if (exists $node->{html_name});
 	if (exists $node->{file_html}) {
 		my $a = "<a href='" . $node->{file_html} . "#" . $fragment . "'>" . $name . "</a>";
+		return $a;
+	} elsif ( $node->isa('BaseInterface') or $node->isa('ForwardBaseInterface') ) {
+		my $filename = $node->{full};
+		$filename =~ s/::/_/g;
+		$filename .= '.html';
+		my $a = "<a href='" . $filename . "#" . $fragment . "'>" . $name . "</a>";
 		return $a;
 	} else {
 		return $name;
