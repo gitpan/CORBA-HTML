@@ -34,7 +34,7 @@ if ($^O eq 'MSWin32') {
 } else {
 	$parser->YYData->{preprocessor} = 'cpp -C ' . $cflags;
 }
-$parser->getopts("fhi:o:t:vx");
+$parser->getopts("fhi:o:s:t:vx");
 if ($parser->YYData->{opt_v}) {
 	print "CORBA::HTML $CORBA::HTML::html::VERSION\n";
 	print "CORBA::IDL $CORBA::IDL::node::VERSION\n";
@@ -73,12 +73,11 @@ if (        $parser->YYData->{verbose_deprecated}
 
 if (        exists $parser->YYData->{root}
 		and ! exists $parser->YYData->{nb_error} ) {
-	$parser->YYData->{root}->visit(new CORBA::IDL::repositoryIdVisitor($parser));	# ?
+	$parser->YYData->{root}->visit(new CORBA::IDL::repositoryIdVisitor($parser));
 	if (        $Parser::IDL_version ge '3.0'
 			and $parser->YYData->{opt_x} ) {
 		$parser->YYData->{symbtab}->Export();
 	}
-#	$parser->YYData->{root}->visit(new CORBA::HTML::fileVisitor($parser));
 	$parser->YYData->{root}->visit(new CORBA::HTML::indexVisitor($parser));
 	$parser->YYData->{root}->visit(new CORBA::HTML::htmlVisitor($parser));
 }
@@ -102,7 +101,7 @@ idl2html [options] I<spec>.idl
 
 =head1 OPTIONS
 
-All options are forwarded to C preprocessor, except -f -h -i -o -t -v -x.
+All options are forwarded to C preprocessor, except -f -h -i -o -s -t -v -x.
 
 With the GNU C Compatible Compiler Processor, useful options are :
 
@@ -139,6 +138,10 @@ Specify a path for import (only for version 3.0).
 =item B<-o> I<file>
 
 Specificy the outfile for HTML Help (default "htmlhelp").
+
+=item B<-s> I<style>
+
+Generate an external Cascading Style Sheet file.
 
 =item B<-t> I<title>
 

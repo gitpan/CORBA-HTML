@@ -448,13 +448,19 @@ sub visitTypeDeclarator {
 	my ($node) = @_;
 	$node->{file_html} = $self->_get_file($node);
 	$self->{index_type}->{$node->{idf}} = $node;
-	return if (exists $node->{modifier});	# native
 	my $type = $self->_get_defn($node->{type});
 	if (	   $type->isa('StructType')
 			or $type->isa('UnionType')
 			or $type->isa('EnumType') ) {
 		$type->visit($self);
 	}
+}
+
+sub visitNativeType {
+	my $self = shift;
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
+	$self->{index_type}->{$node->{idf}} = $node;
 }
 
 #	3.11.2	Constructed Types

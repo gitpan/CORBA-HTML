@@ -8,7 +8,7 @@ use UNIVERSAL;
 package CORBA::HTML::html;
 
 use vars qw($VERSION);
-$VERSION = '2.21';
+$VERSION = '2.40';
 
 package CORBA::HTML::htmlVisitor;
 
@@ -27,6 +27,16 @@ sub new {
 	$self->{html_decl} = new CORBA::HTML::declVisitor($self);
 	$self->{html_comment} = new CORBA::HTML::commentVisitor($self);
 	$self->{scope} = '';
+	$self->{css} = $parser->YYData->{opt_s};
+	$self->{style} = q{
+        a.index { font-weight : bold; }
+        h2 { color : red; }
+        p.comment { color : green; }
+        span.comment { color : green; }
+        span.decl { font-weight : bold; }
+        span.tag { font-weight : bold; }
+        hr { text-align : center; }
+	};
 	return $self;
 }
 
@@ -83,15 +93,13 @@ sub _format_head {
 	print OUT "    <title>",$title,"</title>\n" if ($title);
 	unless ($frameset) {
 		print OUT "    <base target='",$target,"' />\n" if (defined $target);
-		print OUT "    <style type='text/css'>\n";
-		print OUT "      a.index {font-weight: bold}\n";
-		print OUT "      h2 {color: red}\n";
-		print OUT "      p.comment {color: green}\n";
-		print OUT "      span.comment {color: green}\n";
-		print OUT "      span.decl {font-weight: bold}\n";
-		print OUT "      span.tag {font-weight: bold}\n";
-		print OUT "      hr {text-align: center}\n";
-		print OUT "    </style>\n";
+		if ($self->{css}) {
+			print OUT "    <link href='",$self->{css},".css' rel='stylesheet' type='text/css'/>\n";
+		} else {
+			print OUT "    <style type='text/css'>\n";
+			print OUT $self->{style},"\n";
+			print OUT "    </style>\n";
+		}
 	}
 	print OUT "  </head>\n";
 	print OUT "\n";
@@ -509,6 +517,15 @@ sub visitSpecification {
 		print OUT "</HTML>\n";
 
 		close OUT;
+	}
+	if ($self->{css}) {
+		my $outfile = $self->{css} . ".css";
+		unless ( -e $outfile) {
+			open OUT, "> $outfile"
+					or die "can't open $outfile ($!)\n";
+			print OUT $self->{style};
+			close OUT;
+		}
 	}
 }
 
@@ -1327,28 +1344,33 @@ sub visitExpression {
 sub visitTypeDeclarator {
 	my $self = shift;
 	my ($node, $FH) = @_;
-	if (exists $node->{modifier}) {
-		print $FH "<pre>  ";
-			$self->_xp($node, $FH);
-			print $FH "native ";
-			print $FH " <span class='decl'>",$node->{idf},"</span>";
-			print $FH " (",$node->{native},")" if (exists $node->{native});	# XPIDL
-			print $FH ";\n";
-	} else {
-		print $FH "<pre>  ";
-			$self->_xp($node, $FH);
-			print $FH "typedef ";
-			print $FH $self->_get_name($node->{type});
-			print $FH " <span class='decl'>",$node->{idf},"</span>";
-			if (exists $node->{array_size}) {
-				foreach (@{$node->{array_size}}) {
-					print $FH "[";
-					$_->visit($self, $FH);				# expression
-					print $FH "]";
-				}
+	print $FH "<pre>  ";
+		$self->_xp($node, $FH);
+		print $FH "typedef ";
+		print $FH $self->_get_name($node->{type});
+		print $FH " <span class='decl'>",$node->{idf},"</span>";
+		if (exists $node->{array_size}) {
+			foreach (@{$node->{array_size}}) {
+				print $FH "[";
+				$_->visit($self, $FH);				# expression
+				print $FH "]";
 			}
-			print $FH ";\n";
-	}
+		}
+		print $FH ";\n";
+	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
+			if (exists $node->{typeid});
+	print $FH "</pre>\n";
+}
+
+sub visitNativeType {
+	my $self = shift;
+	my ($node, $FH) = @_;
+	print $FH "<pre>  ";
+		$self->_xp($node, $FH);
+		print $FH "native ";
+		print $FH " <span class='decl'>",$node->{idf},"</span>";
+		print $FH " (",$node->{native},")" if (exists $node->{native});	# XPIDL
+		print $FH ";\n";
 	print $FH "  typeid ",$node->{idf}," \"",$node->{typeid},"\";\n"
 			if (exists $node->{typeid});
 	print $FH "</pre>\n";
@@ -1963,11 +1985,12 @@ sub _format_doc_line {
 
 sub _format_tags {
 	my $self = shift;
-	my ($tags, $FH) = @_;
+	my ($tags, $FH, $javadoc) = @_;
 	print $FH "    <p>\n" if (scalar(@{$tags}));
 	foreach (@{$tags}) {
 		my $entry = ${$_}[0];
 		my $doc = ${$_}[1];
+		next if (defined $javadoc and lc($entry) eq "param");
 		$doc = $self->_process_text($doc);
 		print $FH "      <span class='tag'>",$entry," : </span><span class='comment'>",$doc,"</span>\n";
 		print $FH "      <br />\n";
@@ -2036,6 +2059,14 @@ sub visitConstant {
 #
 
 sub visitTypeDeclarator {
+	my $self = shift;
+	my ($node, $FH) = @_;
+	my ($doc, $tags) = $self->_extract_doc($node);
+	$self->_format_doc_bloc($doc, $FH);
+	$self->_format_tags($tags, $FH);
+}
+
+sub visitNativeType {
 	my $self = shift;
 	my ($node, $FH) = @_;
 	my ($doc, $tags) = $self->_extract_doc($node);
@@ -2159,7 +2190,7 @@ sub visitOperation {
 			}
 			print $FH "      <ul>\n";
 			foreach (@{$node->{list_in}}) {
-				$_->visit($self, $FH);			# parameter
+				$self->_parameter($node, $_, $FH);
 			}
 			print $FH "      </ul>\n";
 			print $FH "    </li>\n";
@@ -2172,7 +2203,7 @@ sub visitOperation {
 			}
 			print $FH "      <ul>\n";
 			foreach (@{$node->{list_inout}}) {
-				$_->visit($self, $FH);			# parameter
+				$self->_parameter($node, $_, $FH);
 			}
 			print $FH "      </ul>\n";
 			print $FH "    </li>\n";
@@ -2185,21 +2216,38 @@ sub visitOperation {
 			}
 			print $FH "      <ul>\n";
 			foreach (@{$node->{list_out}}) {
-				$_->visit($self, $FH);			# parameter
+				$self->_parameter($node, $_, $FH);
 			}
 			print $FH "      </ul>\n";
 			print $FH "    </li>\n";
 		}
 		print $FH "  </ul>\n";
 	}
-	$self->_format_tags($tags, $FH);
+	$self->_format_tags($tags, $FH, 1);
 }
 
-sub visitParameter {
+sub _parameter {
 	my $self = shift;
-	my ($node, $FH) = @_;
+	my ($parent, $node, $FH) = @_;
 	my ($doc, $tags) = $self->_extract_doc($node);
-	$self->_format_doc_line($node, $doc, $FH);
+	unless (defined $doc) {
+		($doc, $tags) = $self->_extract_doc($parent);
+		foreach (@{$tags}) {
+			my $entry = ${$_}[0];
+			my $javadoc = ${$_}[1];
+			if (lc($entry) eq "param" and $javadoc =~ /^$node->{idf}/) {
+				$doc = $javadoc;
+				$doc =~ s/^$node->{idf}//;
+				last;
+			}
+		}
+	}
+	if (defined $doc) {
+		$doc = $self->_process_text($doc);
+		print $FH "    <li>",$node->{idf}," : <span class='comment'>",$doc,"</span></li>\n";
+	} else {
+		print $FH "    <li>",$node->{idf},"</li>\n";
+	}
 }
 
 #
@@ -2509,6 +2557,12 @@ sub visitBooleanLiteral {
 #
 
 sub visitTypeDeclarator {
+	my $self = shift;
+	my ($node, $scope) = @_;
+	return $self->_get_name($node, $scope);
+}
+
+sub visitNativeType {
 	my $self = shift;
 	my ($node, $scope) = @_;
 	return $self->_get_name($node, $scope);
