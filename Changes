@@ -1,5 +1,16 @@
 Revision history for Perl extension CORBA::HTML.
 
+2.20  Thu Feb 19 18:30:00 2004
+	- compatible with CORBA::IDL 2.20
+	- idl2html.pl : add option -h (display help)
+	- idl2html.pl : add option -v (dsiplay version)
+
+2.02
+	- missing space in value
+
+2.01
+	- missing link base interface in derived interface
+
 2.00  Mon Jan 13 12:30:00 2003
 	- support CORBA IDL 3.0
 	- refactoring

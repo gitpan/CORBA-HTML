@@ -5,27 +5,27 @@ use UNIVERSAL;
 #			Interface Definition Language (OMG IDL CORBA v3.0)
 #
 
-package indexVisitor;
+package CORBA::HTML::indexVisitor;
+
+use File::Basename;
 
 sub new {
 	my $proto = shift;
 	my $class = ref($proto) || $proto;
 	my $self = {};
 	bless($self, $class);
-	my($parser) = @_;
+	my ($parser) = @_;
 	$self->{symbtab} = $parser->YYData->{symbtab};
-	my $filename = $parser->YYData->{srcname};
-	$filename =~ s/^([^\/]+\/)+//;
-	$filename =~ s/\.idl$//i;
-	$self->{file_html} = '__' . $filename . '.html';
+	$self->{file_html} = "";
 	$self->{done_hash} = {};
 	$self->{save_module} = {};
+	$self->{num_key} = 'idx_html';
 	return $self;
 }
 
 sub _get_name {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	my @list_name = split /::/, $node->{full};
 	my @list_scope = split /::/, $self->{scope};
 	shift @list_name;
@@ -41,11 +41,22 @@ sub _get_name {
 
 sub _get_defn {
 	my $self = shift;
-	my($defn) = @_;
+	my ($defn) = @_;
 	if (ref $defn) {
 		return $defn;
 	} else {
 		return $self->{symbtab}->Lookup($defn);
+	}
+}
+
+sub _get_file {
+	my $self = shift;
+	my ($defn) = @_;
+	if ($self->{file_html}) {
+		return $self->{file_html};
+	} else {
+		my $filename = $defn->{filename};
+		return "__" . basename($defn->{filename}, ".idl") . ".html";
 	}
 }
 
@@ -55,8 +66,7 @@ sub _get_defn {
 
 sub visitSpecification {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
 	$self->{scope} = '::';
 	# init
 	$self->{index_module} = {};
@@ -80,8 +90,8 @@ sub visitSpecification {
 	$self->{index_home} = {};
 	$self->{index_factory} = {};
 	$self->{index_finder} = {};
-	foreach (@{$node->{list_export}}) {
-		$self->{symbtab}->Lookup($_)->visit($self);
+	foreach (@{$node->{list_decl}}) {
+		$self->_get_defn($_)->visit($self);
 	}
 	# save
 	$node->{index_module} = $self->{index_module};
@@ -113,7 +123,7 @@ sub visitSpecification {
 
 sub visitModules {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	$self->{scope} = $node->{full};
 	my $filename = $node->{full};
 	$filename =~ s/::/_/g;
@@ -167,9 +177,12 @@ sub visitModules {
 	$self->{index_home} = $self->{save_module}->{$node->{full}}->{index_home} || {};
 	$self->{index_factory} = $self->{save_module}->{$node->{full}}->{index_factory} || {};
 	$self->{index_finder} = $self->{save_module}->{$node->{full}}->{index_finder} || {};
-	foreach (@{$node->{list_export}}) {
-		$self->{symbtab}->Lookup($_)->visit($self);
+	unless (exists $node->{$self->{num_key}}) {
+		$node->{$self->{num_key}} = 0;
 	}
+	${$node->{list_decl}}[$node->{$self->{num_key}}]->visit($self);
+	$node->{$self->{num_key}} ++;
+
 	$node->{file_html} = $self->{file_html};
 	$node->{index_module} = $self->{index_module};
 	$node->{index_interface} = $self->{index_interface};
@@ -240,13 +253,21 @@ sub visitModules {
 	$self->{index_finder} = $finder;
 }
 
+sub visitModule {
+	my $self = shift;
+	my ($node) = @_;
+	foreach (@{$node->{list_decl}}) {
+		$self->_get_defn($_)->visit($self);
+	}
+}
+
 #
 #	3.8		Interface Declaration
 #
 
 sub _visitBaseInterface {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	$self->{scope} = $node->{full};
 	my $filename = $node->{full};
 	$filename =~ s/::/_/g;
@@ -298,8 +319,8 @@ sub _visitBaseInterface {
 	$self->{index_home} = {};
 	$self->{index_factory} = {};
 	$self->{index_finder} = {};
-	foreach (@{$node->{list_export}}) {
-		$self->{symbtab}->Lookup($_)->visit($self);
+	foreach (@{$node->{list_decl}}) {
+		$self->_get_defn($_)->visit($self);
 	}
 	$node->{file_html} = $self->{file_html};
 	$node->{index_module} = $self->{index_module};
@@ -348,64 +369,55 @@ sub _visitBaseInterface {
 	$self->{index_finder} = $finder;
 }
 
-sub visitRegularInterface {
+sub visitInterface {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	$self->{index_interface}->{$node->{idf}} = $node;
 	$self->_visitBaseInterface($node);
 }
 
-sub visitAbstractInterface {
-	my $self = shift;
-	my($node) = @_;
-	$self->{index_interface}->{$node->{idf}} = $node;
-	$self->_visitBaseInterface($node);
-}
-
-sub visitLocalInterface {
-	my $self = shift;
-	my($node) = @_;
-	$self->{index_interface}->{$node->{idf}} = $node;
-	$self->_visitBaseInterface($node);
+sub visitForwardBaseInterface {
+	# empty
 }
 
 #
 #	3.9		Value Declaration
 #
 
-sub visitRegularValue {
+sub visitValue {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	$self->{index_value}->{$node->{idf}} = $node;
 	$self->_visitBaseInterface($node);
 }
 
+sub visitStateMembers {
+	my $self = shift;
+	my ($node) = @_;
+	foreach (@{$node->{list_decl}}) {
+		$self->_get_defn($_)->visit($self);
+	}
+}
+
 sub visitStateMember {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_state_member}->{$node->{idf}} = $node;
 }
 
 sub visitInitializer {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_initializer}->{$node->{idf}} = $node;
 }
 
 sub visitBoxedValue {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_boxed_value}->{$node->{idf}} = $node;
-}
-
-sub visitAbstractValue {
-	my $self = shift;
-	my($node) = @_;
-	$self->{index_value}->{$node->{idf}} = $node;
-	$self->_visitBaseInterface($node);
 }
 
 #
@@ -414,8 +426,8 @@ sub visitAbstractValue {
 
 sub visitConstant {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_constant}->{$node->{idf}} = $node;
 }
 
@@ -423,10 +435,18 @@ sub visitConstant {
 #	3.11	Type Declaration
 #
 
+sub visitTypeDeclarators {
+	my $self = shift;
+	my ($node) = @_;
+	foreach (@{$node->{list_decl}}) {
+		$self->_get_defn($_)->visit($self);
+	}
+}
+
 sub visitTypeDeclarator {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_type}->{$node->{idf}} = $node;
 	return if (exists $node->{modifier});	# native
 	my $type = $self->_get_defn($node->{type});
@@ -442,13 +462,13 @@ sub visitTypeDeclarator {
 
 sub visitStructType {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	return if (exists $self->{done_hash}->{$node->{full}});
 	$self->{done_hash}->{$node->{full}} = 1;
 	my $name = $self->_get_name($node);
 	$self->{index_type}->{$name} = $node;
 	$node->{html_name} = $name;
-	$node->{file_html} = $self->{file_html};
+	$node->{file_html} = $self->_get_file($node);
 	foreach (@{$node->{list_expr}}) {
 		my $type = $self->_get_defn($_->{type});
 		if (	   $type->isa('StructType')
@@ -456,34 +476,27 @@ sub visitStructType {
 			$type->visit($self);
 		}
 	}
-	foreach (@{$node->{list_value}}) {
-		$self->_get_defn($_)->visit($self);		# single or array
+	foreach (@{$node->{list_member}}) {
+		$self->_get_defn($_)->visit($self, $node->{file_html});		# member
 	}
 }
 
-sub visitArray {
+sub visitMember {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
-	$node->{html_name} = $self->_get_name($node);
-}
-
-sub visitSingle {
-	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node, $filename) = @_;
+	$node->{file_html} = $filename;
 	$node->{html_name} = $self->_get_name($node);
 }
 
 sub visitUnionType {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	return if (exists $self->{done_hash}->{$node->{full}});
 	$self->{done_hash}->{$node->{full}} = 1;
 	my $name = $self->_get_name($node);
 	$self->{index_type}->{$name} = $node;
 	$node->{html_name} = $name;
-	$node->{file_html} = $self->{file_html};
+	$node->{file_html} = $self->_get_file($node);
 	my $type = $self->_get_defn($node->{type});
 	if ($type->isa('EnumType')) {
 		$type->visit($self);
@@ -494,26 +507,34 @@ sub visitUnionType {
 				or $type->isa('UnionType') ) {
 			$type->visit($self);
 		}
-		$self->_get_defn($_->{element}->{value})->visit($self);		# single or array
+		$self->_get_defn($_->{element}->{value})->visit($self, $node->{file_html});		# member
 	}
+}
+
+sub visitForwardStructType {
+	# empty
+}
+
+sub visitForwardUnionType {
+	# empty
 }
 
 sub visitEnumType {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	my $name = $self->_get_name($node);
 	$self->{index_type}->{$name} = $node;
 	$node->{html_name} = $name;
-	$node->{file_html} = $self->{file_html};
+	$node->{file_html} = $self->_get_file($node);
 	foreach (@{$node->{list_expr}}) {
-		$_->visit($self);				# enum
+		$_->visit($self, $node->{file_html});				# enum
 	}
 }
 
 sub visitEnum {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node, $filename) = @_;
+	$node->{file_html} = $filename;
 	$node->{html_name} = $self->_get_name($node);
 }
 
@@ -523,11 +544,11 @@ sub visitEnum {
 
 sub visitException {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_exception}->{$node->{idf}} = $node;
-	foreach (@{$node->{list_value}}) {
-		$self->_get_defn($_)->visit($self);		# single or array
+	foreach (@{$node->{list_member}}) {
+		$self->_get_defn($_)->visit($self);
 	}
 }
 
@@ -537,8 +558,8 @@ sub visitException {
 
 sub visitOperation {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_operation}->{$node->{idf}} = $node;
 }
 
@@ -546,27 +567,40 @@ sub visitOperation {
 #	3.14	Attribute Declaration
 #
 
+sub visitAttributes {
+	my $self = shift;
+	my ($node) = @_;
+	foreach (@{$node->{list_decl}}) {
+		$self->_get_defn($_)->visit($self);
+	}
+}
+
 sub visitAttribute {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_attribute}->{$node->{idf}} = $node;
+}
+
+#
+#	3.15	Repository Identity Related Declarations
+#
+
+sub visitTypeId {
+	# empty
+}
+
+sub visitTypePrefix {
+	# empty
 }
 
 #
 #	3.16	Event Declaration
 #
 
-sub visitRegularEvent {
+sub visitEvent {
 	my $self = shift;
-	my($node) = @_;
-	$self->{index_event}->{$node->{idf}} = $node;
-	$self->_visitBaseInterface($node);
-}
-
-sub visitAbstractEvent {
-	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	$self->{index_event}->{$node->{idf}} = $node;
 	$self->_visitBaseInterface($node);
 }
@@ -577,43 +611,43 @@ sub visitAbstractEvent {
 
 sub visitComponent {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	$self->{index_component}->{$node->{idf}} = $node;
 	$self->_visitBaseInterface($node);
 }
 
 sub visitProvides {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_provides}->{$node->{idf}} = $node;
 }
 
 sub visitUses {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_uses}->{$node->{idf}} = $node;
 }
 
 sub visitPublishes {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_publishes}->{$node->{idf}} = $node;
 }
 
 sub visitEmits {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_emits}->{$node->{idf}} = $node;
 }
 
 sub visitConsumes {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_consumes}->{$node->{idf}} = $node;
 }
 
@@ -623,23 +657,31 @@ sub visitConsumes {
 
 sub visitHome {
 	my $self = shift;
-	my($node) = @_;
+	my ($node) = @_;
 	$self->{index_home}->{$node->{idf}} = $node;
 	$self->_visitBaseInterface($node);
 }
 
 sub visitFactory {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_factory}->{$node->{idf}} = $node;
 }
 
 sub visitFinder {
 	my $self = shift;
-	my($node) = @_;
-	$node->{file_html} = $self->{file_html};
+	my ($node) = @_;
+	$node->{file_html} = $self->_get_file($node);
 	$self->{index_finder}->{$node->{idf}} = $node;
+}
+
+#
+#	XPIDL
+#
+
+sub visitCodeFragment {
+	# empty
 }
 
 1;

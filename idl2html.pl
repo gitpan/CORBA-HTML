@@ -6,6 +6,7 @@ use CORBA::IDL::parser30;
 use CORBA::IDL::symbtab;
 # visitors
 use CORBA::IDL::repos_id;
+#use CORBA::HTML::file;
 use CORBA::HTML::index;
 use CORBA::HTML::html;
 
@@ -14,6 +15,7 @@ unless (do "index.lst") {
 	$global->{index_module} = {};
 	$global->{index_interface} = {};
 	$global->{index_value} = {};
+	$global->{index_entry} = {};
 }
 
 my $parser = new Parser;
@@ -21,7 +23,7 @@ $parser->YYData->{verbose_error} = 1;		# 0, 1
 $parser->YYData->{verbose_warning} = 1;		# 0, 1
 $parser->YYData->{verbose_info} = 1;		# 0, 1
 $parser->YYData->{verbose_deprecated} = 1;	# 0, 1 (concerns only version '2.4' and upper)
-$parser->YYData->{symbtab} = new Symbtab($parser);
+$parser->YYData->{symbtab} = new CORBA::IDL::Symbtab($parser);
 my $cflags = '-D__idl2html';
 if ($Parser::IDL_version lt '3.0') {
 	$cflags .= ' -D_PRE_3_0_COMPILER_';
@@ -33,7 +35,19 @@ if ($^O eq 'MSWin32') {
 } else {
 	$parser->YYData->{preprocessor} = 'cpp -C ' . $cflags;
 }
-$parser->getopts("fi:x");
+$parser->getopts("fhi:o:t:vx");
+if ($parser->YYData->{opt_v}) {
+	print "CORBA::HTML $CORBA::HTML::htmlVisitor::VERSION\n";
+	print "CORBA::IDL $CORBA::IDL::VERSION\n";
+	print "IDL $Parser::IDL_version\n";
+	print "$0\n";
+	print "Perl $]\n";
+	exit;
+}
+if ($parser->YYData->{opt_h}) {
+	use Pod::Usage;
+	pod2usage(-verbose => 1);
+}
 $parser->Run(@ARGV);
 $parser->YYData->{symbtab}->CheckForward();
 $parser->YYData->{symbtab}->CheckRepositoryID();
@@ -60,13 +74,14 @@ if (        $parser->YYData->{verbose_deprecated}
 
 if (        exists $parser->YYData->{root}
 		and ! exists $parser->YYData->{nb_error} ) {
-	$parser->YYData->{root}->visitName(new repositoryIdVisitor($parser));	# ?
+	$parser->YYData->{root}->visit(new CORBA::IDL::repositoryIdVisitor($parser));	# ?
 	if (        $Parser::IDL_version ge '3.0'
 			and $parser->YYData->{opt_x} ) {
 		$parser->YYData->{symbtab}->Export();
 	}
-	$parser->YYData->{root}->visit(new indexVisitor($parser));
-	$parser->YYData->{root}->visit(new htmlVisitor($parser));
+#	$parser->YYData->{root}->visit(new CORBA::HTML::fileVisitor($parser));
+	$parser->YYData->{root}->visit(new CORBA::HTML::indexVisitor($parser));
+	$parser->YYData->{root}->visit(new CORBA::HTML::htmlVisitor($parser));
 }
 
 if (open PERSISTANCE,"> index.lst") {
@@ -82,13 +97,13 @@ __END__
 
 idl2html - Generates HTML documentation from IDL source files.
 
-=head1 SYNOPSYS
+=head1 SYNOPSIS
 
 idl2html [options] I<spec>.idl
 
 =head1 OPTIONS
 
-All options are forwarded to C preprocessor, except -f -i -x.
+All options are forwarded to C preprocessor, except -f -h -i -o -t -v -x.
 
 With the GNU C Compatible Compiler Processor, useful options are :
 
@@ -114,9 +129,25 @@ Specific options :
 
 Enable the frameset mode.
 
+=item B<-h>
+
+Display help.
+
 =item B<-i> I<directory>
 
 Specify a path for import (only for version 3.0).
+
+=item B<-o> I<file>
+
+Specificy the outfile for HTML Help (default "htmlhelp").
+
+=item B<-t> I<title>
+
+Specificy the title of HTML Help.
+
+=item B<-v>
+
+Display version.
 
 =item B<-x>
 
@@ -128,6 +159,7 @@ Enable export (only for version 3.0).
 
 B<idl2html> parses the declarations and doc comments in a IDL source file and
 formats these into a set of HTML pages.
+B<idl2html> generates some helper files for HTML Help compiler.
 
 B<idl2html> works like B<javadoc>.
 
@@ -180,8 +212,6 @@ Tags must start at the beginning of a line.
 
 =head1 SPECIAL REQUIREMENTS
 
-B<idl2html> needs Math::BigInt and Math::BigFloat modules.
-
 B<idl2html> needs a B<cpp> executable or B<CL.EXE> for Microsoft Windows.
 
 CORBA Specifications, including IDL (Interface Definition Language)
@@ -193,7 +223,7 @@ cpp, javadoc
 
 =head1 COPYRIGHT
 
-(c) 2001-2003 Francois PERRAD, France. All rights reserved.
+(c) 2001-2004 Francois PERRAD, France. All rights reserved.
 
 This program and all CORBA::HTML modules are distributed
 under the terms of the Artistic Licence.
