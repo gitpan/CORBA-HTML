@@ -157,9 +157,16 @@ CORBA Specifications, including IDL (Interface Definition Language)
 
 cpp, javadoc, perl
 
+=head1 COPYRIGHT
+
+(c) 2001-2002 Francois PERRAD, France. All rights reserved.
+
+This program and all CORBA::HTML modules are distributed
+under the terms of the Artistic Licence.
+
 =head1 AUTHOR
 
-Francois PERRAD
+Francois PERRAD E<lt>perrad@besancon.sema.slb.comE<gt>
 
 =cut
 

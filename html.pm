@@ -5,7 +5,7 @@ package htmlVisitor;
 use CORBA::HTML::name;
 
 use vars qw($VERSION);
-$VERSION = '1.0';
+$VERSION = '1.01';
 
 sub new {
 	my $proto = shift;
@@ -59,7 +59,7 @@ sub _format_head {
 	print OUT "  </head>\n";
 	print OUT "\n";
 	print OUT "  <body>\n";
-	print OUT "    <a name='__Top__'></a>\n";
+	print OUT "    <a name='__Top__'/>\n";
 	print OUT "    <h1>",$title,"</h1>\n";
 	print OUT "    <p><a href='index.html'>Global index</a></p>\n"
 			unless ($title eq "Global index");
@@ -114,7 +114,7 @@ sub _format_decl {
 				foreach (sort keys %{$node->{$idx}}) {
 					my $child = $node->{$idx}->{$_};
 					print OUT "    <li>\n";
-					print OUT "      <h3><a name='",$_,"'></a>",$_,"</h3>\n";
+					print OUT "      <h3><a name='",$_,"'/>",$_,"</h3>\n";
 					$self->_print_decl($child);
 					$self->_print_comment($child);
 					print OUT "    </li>\n";
@@ -398,7 +398,7 @@ sub _get_name {
 sub visitModule {
 	my $self = shift;
 	my($node,$FH) = @_;
-	print $FH "<p><a name='",$node->{idf},"'></a>module <b>",$node->{idf},"</b></p>\n";
+	print $FH "<p><a name='",$node->{idf},"'/>module <b>",$node->{idf},"</b></p>\n";
 }
 
 #
@@ -408,7 +408,7 @@ sub visitModule {
 sub visitInterface {
 	my $self = shift;
 	my($node,$FH) = @_;
-	print $FH "<p><a name='",$node->{idf},"'></a>";
+	print $FH "<p><a name='",$node->{idf},"'/>";
 		print $FH $node->{modifier}," "
 				if (exists $node->{modifier});
 		print $FH "interface <b>",$node->{idf},"</b>";
@@ -433,7 +433,7 @@ sub visitInterface {
 sub visitRegularValue {
 	my $self = shift;
 	my($node,$FH) = @_;
-	print $FH "<p><a name='",$node->{idf},"'></a>";
+	print $FH "<p><a name='",$node->{idf},"'/>";
 		print $FH "custom "
 				if (exists $node->{modifier});
 		print $FH "valuetype <b>",$node->{idf},"</b>";
@@ -516,7 +516,7 @@ sub visitBoxedValue {
 sub visitAbstractValue {
 	my $self = shift;
 	my($node,$FH) = @_;
-	print $FH "<p><a name='",$node->{idf},"'></a>";
+	print $FH "<p><a name='",$node->{idf},"'/>";
 		print $FH "abstract valuetype <b>",$node->{idf},"</b>";
 		if (exists $node->{inheritance}) {
 			my $inheritance = $node->{inheritance};
@@ -820,6 +820,7 @@ sub _lookup {
 	my $self = shift;
 	my($name) = @_;
 	my $defn;
+#	print "_lookup: '$name'\n";
 	if      ($name =~ /^::/) {
 		# global name
 		return $self->{parent}->{parser}->YYData->{symbtab}->___Lookup($name);
@@ -841,6 +842,7 @@ sub _lookup {
 		my $idf = pop @list;
 		my $scoped_name = $name;
 		$scoped_name =~ s/(::[0-9A-Z_a-z]+$)//;
+#		print "qualified name : '$scoped_name' '$idf'\n";
 		my $scope = $self->_lookup($scoped_name);		# recursive
 		if (defined $scope) {
 			$defn = $self->{parent}->{parser}->YYData->{symbtab}->___Lookup($scope->{coll} . '::' . $idf);
@@ -870,7 +872,8 @@ sub _process_text {
 			if (	    defined $node
 					and exists $node->{file_html}
 					and $word =~ /$node->{idf}/ ) {
-				$word = "<a href='" . $node->{file_html} . "#" . $node->{idf} . "'>" . $word . "</a>";
+				my $anchor = $node->{html_name} || $node->{idf};
+				$word = "<a href='" . $node->{file_html} . "#" . $anchor . "'>" . $word . "</a>";
 			}
 		} elsif ($word =~ /^\w+:\/\/\w/) {
 			# looks like a URL
@@ -900,12 +903,14 @@ sub _format_doc_bloc {
 sub _format_doc_line {
 	my $self = shift;
 	my($node,$doc,$FH) = @_;
+	unless ($node->isa('Parameter')) {
+		print $FH "    <a name='",$node->{html_name},"'/>\n";
+	}
 	if (defined $doc) {
 		$doc = $self->_process_text($doc);
 		print $FH "    <li>",$node->{idf}," : <font color='#009900'>",$doc,"</font></li>\n";
 	} else {
-		print $FH "    <li>",$node->{idf},"</li>\n"
-				if ($node->isa('Parameter'));
+		print $FH "    <li>",$node->{idf},"</li>\n";
 	}
 }
 

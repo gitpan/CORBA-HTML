@@ -455,6 +455,23 @@ sub visitStructType {
 			$_->{type}->visit($self);
 		}
 	}
+	foreach (@{$node->{list_value}}) {
+		$_->visit($self);				# single or array
+	}
+}
+
+sub visitArray {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$node->{html_name} = $self->_get_name($node);
+}
+
+sub visitSingle {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$node->{html_name} = $self->_get_name($node);
 }
 
 sub visitUnionType {
@@ -469,11 +486,12 @@ sub visitUnionType {
 	if ($node->{type}->isa('EnumType')) {
 		$node->{type}->visit($self);
 	}
-	foreach (@{$node->{list_expr}}) {
+	foreach (@{$node->{list_expr}}) {	# case
 		if (	   $_->{element}->{type}->isa('StructType')
 				or $_->{element}->{type}->isa('UnionType') ) {
 			$_->{element}->{type}->visit($self);
 		}
+		$_->{element}->{value}->visit($self);	# array or single
 	}
 }
 
@@ -484,6 +502,16 @@ sub visitEnumType {
 	$self->{index_type}->{$name} = $node;
 	$node->{html_name} = $name;
 	$node->{file_html} = $self->{file_html};
+	foreach (@{$node->{list_expr}}) {
+		$_->visit($self);				# enum
+	}
+}
+
+sub visitEnum {
+	my $self = shift;
+	my($node) = @_;
+	$node->{file_html} = $self->{file_html};
+	$node->{html_name} = $self->_get_name($node);
 }
 
 #
@@ -509,6 +537,9 @@ sub visitException {
 	my($node) = @_;
 	$node->{file_html} = $self->{file_html};
 	$self->{index_exception}->{$node->{idf}} = $node;
+	foreach (@{$node->{list_value}}) {
+		$_->visit($self);				# single or array
+	}
 }
 
 #
