@@ -14,6 +14,7 @@ sub new {
 	$filename =~ s/\.idl$//i;
 	$self->{file_html} = '__' . $filename . '.html';
 	$self->{done_hash} = {};
+	$self->{save_module} = {};
 	return $self;
 }
 
@@ -83,6 +84,8 @@ sub visitModule {
 	$filename =~ s/::/_/g;
 	$filename .= '.html';
 	$self->{index_module}->{$node->{idf}} = $node;
+	$self->{save_module}->{$node->{coll}} = {}
+			unless (exists $self->{save_module}->{$node->{coll}});
 	# local save
 	my $file_html = $self->{file_html};
 	my $module = $self->{index_module};
@@ -98,17 +101,17 @@ sub visitModule {
 	my $initializer = $self->{index_initializer};
 	# re init
 	$self->{file_html} = $filename;
-	$self->{index_module} = {};
-	$self->{index_interface} = {};
-	$self->{index_operation} = {};
-	$self->{index_attribute} = {};
-	$self->{index_constant} = {};
-	$self->{index_exception} = {};
-	$self->{index_type} = {};
-	$self->{index_value} = {};
-	$self->{index_boxed_value} = {};
-	$self->{index_state_member} = {};
-	$self->{index_initializer} = {};
+	$self->{index_module} = $self->{save_module}->{$node->{coll}}->{index_module} || {};
+	$self->{index_interface} = $self->{save_module}->{$node->{coll}}->{index_interface} || {};
+	$self->{index_operation} = $self->{save_module}->{$node->{coll}}->{index_operation} || {};
+	$self->{index_attribute} = $self->{save_module}->{$node->{coll}}->{index_attribute} || {};
+	$self->{index_constant} = $self->{save_module}->{$node->{coll}}->{index_constant} || {};
+	$self->{index_exception} = $self->{save_module}->{$node->{coll}}->{index_exception} || {};
+	$self->{index_type} = $self->{save_module}->{$node->{coll}}->{index_type} || {};
+	$self->{index_value} = $self->{save_module}->{$node->{coll}}->{index_value} || {};
+	$self->{index_boxed_value} = $self->{save_module}->{$node->{coll}}->{index_boxed_value} || {};
+	$self->{index_state_member} = $self->{save_module}->{$node->{coll}}->{index_state_member} || {};
+	$self->{index_initializer} = $self->{save_module}->{$node->{coll}}->{index_initializer} || {};
 	foreach (@{$node->{list_decl}}) {
 		$_->visit($self);
 	}
@@ -124,6 +127,19 @@ sub visitModule {
 	$node->{index_boxed_value} = $self->{index_boxed_value};
 	$node->{index_state_member} = $self->{index_state_member};
 	$node->{index_initializer} = $self->{index_initializer};
+	#
+	$self->{save_module}->{$node->{coll}}->{file_html} = $self->{file_html};
+	$self->{save_module}->{$node->{coll}}->{index_module} = $self->{index_module};
+	$self->{save_module}->{$node->{coll}}->{index_interface} = $self->{index_interface};
+	$self->{save_module}->{$node->{coll}}->{index_operation} = $self->{index_operation};
+	$self->{save_module}->{$node->{coll}}->{index_attribute} = $self->{index_attribute};
+	$self->{save_module}->{$node->{coll}}->{index_constant} = $self->{index_constant};
+	$self->{save_module}->{$node->{coll}}->{index_exception} = $self->{index_exception};
+	$self->{save_module}->{$node->{coll}}->{index_type} = $self->{index_type};
+	$self->{save_module}->{$node->{coll}}->{index_value} = $self->{index_value};
+	$self->{save_module}->{$node->{coll}}->{index_boxed_value} = $self->{index_boxed_value};
+	$self->{save_module}->{$node->{coll}}->{index_state_member} = $self->{index_state_member};
+	$self->{save_module}->{$node->{coll}}->{index_initializer} = $self->{index_initializer};
 	# restore
 	$self->{file_html} = $file_html;
 	$self->{index_module} = $module;

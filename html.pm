@@ -5,7 +5,7 @@ package htmlVisitor;
 use CORBA::HTML::name;
 
 use vars qw($VERSION);
-$VERSION = '1.02';
+$VERSION = '1.03';
 
 sub new {
 	my $proto = shift;
