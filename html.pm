@@ -5,7 +5,7 @@ package htmlVisitor;
 use CORBA::HTML::name;
 
 use vars qw($VERSION);
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 sub new {
 	my $proto = shift;
@@ -802,6 +802,7 @@ sub _extract_doc {
 				push @tags,[$1,$2];
 			} else {
 				$doc .= $_;
+				$doc .= "\n";
 			}
 		}
 	}

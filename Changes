@@ -1,5 +1,8 @@
 Revision history for Perl extension CORBA::HTML.
 
+1.02  Tue May 14 08:30:00 2002
+	- Add \n for <PRE>
+
 1.01  Mon Mar 04 12:30:00 2002
 
 1.0   Mon Jan 20 20:00:00 2002
