@@ -1,8 +1,10 @@
 Changes
-html.pm
-index.pm
-idl2html.pl
+lib/CORBA/HTML.pm
+lib/CORBA/HTML/html.pm
+lib/CORBA/HTML/index.pm
+bin/idl2html
 MANIFEST
 Makefile.PL
 test.pl
 README
+META.yml                                 Module meta-data (added by MakeMaker)

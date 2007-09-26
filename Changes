@@ -1,5 +1,8 @@
 Revision history for Perl extension CORBA::HTML.
 
+2.42  Wed Sep 26 12:30:00 2007
+	- reorg: more compliant with CPAN requirements
+
 2.41  Mon Jun  7 08:30:00 2004
 	- better support of 'import'
 
@@ -12,7 +15,7 @@ Revision history for Perl extension CORBA::HTML.
 2.20  Thu Feb 19 18:30:00 2004
 	- compatible with CORBA::IDL 2.20
 	- idl2html.pl : add option -h (display help)
-	- idl2html.pl : add option -v (dsiplay version)
+	- idl2html.pl : add option -v (display version)
 
 2.02
 	- missing space in value
@@ -37,7 +40,7 @@ Revision history for Perl extension CORBA::HTML.
 
 1.0   Mon Jan 20 20:00:00 2002
 	- Add special tags (@version, @author)
-	- Add hyperlink to e-mail, www and IDL symbol 
+	- Add hyperlink to e-mail, www and IDL symbol
 
 0.90  Fri Dec 14 15:30:00 2001
 	- first version

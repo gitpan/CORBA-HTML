@@ -5,11 +5,6 @@ use UNIVERSAL;
 #			Interface Definition Language (OMG IDL CORBA v3.0)
 #
 
-package CORBA::HTML::html;
-
-use vars qw($VERSION);
-$VERSION = '2.41';
-
 package CORBA::HTML::htmlVisitor;
 
 use File::Basename;
@@ -87,7 +82,7 @@ sub _format_head {
 	print OUT "<html xmlns='http://www.w3.org/1999/xhtml'>\n";
 	print OUT "\n";
 	print OUT "  <head>\n";
-	print OUT "    <meta name='generator' content='idl2html ",$CORBA::HTML::html::VERSION," (Perl ",$],")' />\n";
+	print OUT "    <meta name='generator' content='idl2html ",$CORBA::HTML::VERSION," (Perl ",$],")' />\n";
 	print OUT "    <meta name='date' content='",$now,"' />\n";
 	print OUT "    <meta http-equiv='Content-Type' content='text/html; charset=ISO-8859-1' />\n";
 	print OUT "    <title>",$title,"</title>\n" if ($title);
@@ -447,7 +442,7 @@ sub visitSpecification {
 
 		print OUT "<HTML>\n";		# no XHTML
 		print OUT "  <HEAD>\n";
-		print OUT "    <meta name=\"generator\" content=\"idl2html ",$CORBA::HTML::html::VERSION," (Perl ",$],")\">\n";
+		print OUT "    <meta name=\"generator\" content=\"idl2html ",$CORBA::HTML::VERSION," (Perl ",$],")\">\n";
 		print OUT "  </HEAD>\n";
 		print OUT "  <BODY>\n";
 		print OUT "    <OBJECT type=\"text/site properties\">\n";
@@ -502,7 +497,7 @@ sub visitSpecification {
 
 		print OUT "<HTML>\n";		# no XHTML
 		print OUT "  <HEAD>\n";
-		print OUT "    <meta name=\"generator\" content=\"idl2html ",$CORBA::HTML::html::VERSION," (Perl ",$],")\">\n";
+		print OUT "    <meta name=\"generator\" content=\"idl2html ",$CORBA::HTML::VERSION," (Perl ",$],")\">\n";
 		print OUT "  </HEAD>\n";
 		print OUT "  <BODY>\n";
 		print OUT "    <UL>\n";
@@ -1398,7 +1393,9 @@ sub visitStructType {
 sub visitMembers {
 	my $self = shift;
 	my ($node, $FH) = @_;
-	print $FH "    ",$self->_get_name($node->{type});
+	print $FH "    ";
+	$self->_xp_props($node, $FH);
+	print $FH " ",$self->_get_name($node->{type});
 	my $first = 1;
 	foreach (@{$node->{list_member}}) {
 		if ($first) {

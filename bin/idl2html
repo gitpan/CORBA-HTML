@@ -2,15 +2,17 @@
 
 use strict;
 use Data::Dumper;
+use CORBA::IDL;
 use CORBA::IDL::parser30;
 use CORBA::IDL::symbtab;
+use CORBA::HTML;
 # visitors
 use CORBA::IDL::repos_id;
 use CORBA::HTML::index;
 use CORBA::HTML::html;
 
 use vars qw ($global);
-unless (do "index.lst") {
+unless (do 'index.lst') {
 	$global->{index_module} = {};
 	$global->{index_interface} = {};
 	$global->{index_value} = {};
@@ -31,13 +33,14 @@ if ($Parser::IDL_version lt '3.0') {
 if ($^O eq 'MSWin32') {
 	$parser->YYData->{preprocessor} = 'cpp -C ' . $cflags;
 #	$parser->YYData->{preprocessor} = 'CL /E /C /nologo ' . $cflags;	# Microsoft VC
-} else {
+}
+else {
 	$parser->YYData->{preprocessor} = 'cpp -C ' . $cflags;
 }
-$parser->getopts("fhi:o:s:t:vx");
+$parser->getopts('fhi:o:s:t:vx');
 if ($parser->YYData->{opt_v}) {
-	print "CORBA::HTML $CORBA::HTML::html::VERSION\n";
-	print "CORBA::IDL $CORBA::IDL::node::VERSION\n";
+	print "CORBA::HTML $CORBA::HTML::VERSION\n";
+	print "CORBA::IDL $CORBA::IDL::VERSION\n";
 	print "IDL $Parser::IDL_version\n";
 	print "$0\n";
 	print "Perl $] on $^O\n";
@@ -82,9 +85,9 @@ if (        exists $parser->YYData->{root}
 	$parser->YYData->{root}->visit(new CORBA::HTML::htmlVisitor($parser));
 }
 
-if (open PERSISTANCE,"> index.lst") {
-	print PERSISTANCE Data::Dumper->Dump([$global], [qw(global)]);
-	close PERSISTANCE;
+if (open my $PERSISTANCE, '>', 'index.lst') {
+	print $PERSISTANCE Data::Dumper->Dump([$global], [qw(global)]);
+	close $PERSISTANCE;
 } else {
 	warn "can't open index.lst.\n";
 }
@@ -225,7 +228,7 @@ cpp, javadoc
 
 =head1 COPYRIGHT
 
-(c) 2001-2004 Francois PERRAD, France. All rights reserved.
+(c) 2001-2007 Francois PERRAD, France. All rights reserved.
 
 This program and all CORBA::HTML modules are distributed
 under the terms of the Artistic Licence.
