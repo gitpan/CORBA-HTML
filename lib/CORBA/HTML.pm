@@ -2,8 +2,10 @@ use strict;
 
 package CORBA::HTML;
 
-use vars qw($VERSION);
-$VERSION = '2.42';
+our $VERSION = '2.60';
+
+use CORBA::HTML::IndexVisitor;
+use CORBA::HTML::HtmlVisitor;
 
 1;
 
